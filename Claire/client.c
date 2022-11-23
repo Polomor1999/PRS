@@ -107,12 +107,12 @@ int main(int argc,char* argv[])
 	// Filling server information
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_port = htons(port_serveur);
-	servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+	servaddr.sin_addr.s_addr = inet_addr(ip_serveur);
 
     //socket maj pour avoir le nouveau port
     memset(&newservaddr, 0, sizeof(newservaddr));
     newservaddr.sin_family = AF_INET;
-	newservaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+	newservaddr.sin_addr.s_addr = inet_addr(ip_serveur);
 
     //send SYN message to server
     sendto(

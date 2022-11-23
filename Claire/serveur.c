@@ -54,7 +54,7 @@ void send_file_data(FILE* fp, int sockfd, struct sockaddr_in addr)
     n = sendto(sockfd, numero, lendata+6, 0, (struct sockaddr*)&addr, sizeof(addr));
     if (n == -1)
     {
-      perror("[ERROR] sending data to the server.");
+      perror("[ERROR] sending data to the client.");
       exit(1);
     }
 
@@ -109,8 +109,8 @@ else
 	socklen_t len;
 	const int on = 1;
 	struct sockaddr_in cliaddr, servaddr,servaddr1;
-	char* message = "SYN_ACK|1222"; //nouveau port pour socket d'écoute avec le client 
-	char* message2 = "débutfichier";
+	char* message = "SYN-ACK1222"; //nouveau port pour socket d'écoute avec le client 
+	char* message2 = "fleur.jpg";
 	char* message3 = "let'sgo";
 	void sig_chld(int);
 
@@ -169,7 +169,7 @@ else
 		if (strcmp(buffer,"ACK") ==0 ){
 			puts(buffer);
 			//FIN D'OUVERTURE DE CONNEXION
-			sendto(socketudp, (const char*)message3, strlen(message3), 0,(struct sockaddr*)&cliaddr, sizeof(cliaddr));
+			//sendto(socketudp, (const char*)message3, strlen(message3), 0,(struct sockaddr*)&cliaddr, sizeof(cliaddr));
 			//printf("FIN D'OUVERTURE DE CONNEXION\n");
 
 			while(1){
@@ -178,18 +178,18 @@ else
 				printf("\nMessage from Client on newsocket: ");
 				b = recvfrom(newsocketudp, buffer2, sizeof(buffer2), 0,(struct sockaddr*)&cliaddr, &len);
 				//printf("octets recus :%d\n", b);
-				if (strcmp(buffer2,"GGO") ==0 ){
-					puts(buffer2);
-					//sendto(newsocketudp, (const char*)message2, strlen(message2), 0,(struct sockaddr*)&cliaddr, sizeof(cliaddr));
-					char *filename = "sujet.pdf";
-  					FILE *fp = fopen(filename, "rb");
+				//if (strcmp(buffer2,"GGO") ==0 ){
+				//puts(buffer2);
+				sendto(newsocketudp, (const char*)message2, strlen(message2), 0,(struct sockaddr*)&cliaddr, sizeof(cliaddr));
+				char *filename = "fleur.jpg";
+  				FILE *fp = fopen(filename, "rb");
 
-					// Sending the file data to the server
-					send_file_data(fp, newsocketudp, cliaddr);
-					printf("[SUCCESS] Data transfer complete.\n");
+				// Sending the file data to the server
+				send_file_data(fp, newsocketudp, cliaddr);
+				printf("[SUCCESS] Data transfer complete.\n");
+				//close(newsocketudp);
 
-
-				}
+				//}
 			}
 		
 		}
