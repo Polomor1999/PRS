@@ -34,6 +34,7 @@ void send_file_data(FILE* fp, int sockfd, struct sockaddr_in addr)
 
   while (flag) //je lit tout d'un coup
   {
+	sleep(1);
 	lendata=fread(buffer, 1,MAXLINE, fp);//taille que j'ai reussi a lire dans mon file
 	flag = !(lendata<1024); //flag=0 si on atteint la fin du file
 
@@ -170,10 +171,11 @@ else
 			puts(buffer);
 			char *filename = "photo.jpeg";
   			FILE *fp = fopen(filename, "rb");
-			while(fgets(buffer2, MAXLINE, fp) != NULL){
+
 				//ouverture nouvelle socket pr comm exclusivement avec le client 
 				bzero(buffer2, sizeof(buffer2));
 				printf("\nMessage from Client on newsocket: ");
+			while(1){
 				b = recvfrom(newsocketudp, buffer2, sizeof(buffer2), 0,(struct sockaddr*)&cliaddr, &len);
 				//puts(buffer2);
 				sendto(newsocketudp, (const char*)message2, strlen(message2), 0,(struct sockaddr*)&cliaddr, sizeof(cliaddr));
@@ -182,7 +184,7 @@ else
 					// Sending the file data to the server
 				send_file_data(fp, newsocketudp, cliaddr);
 				printf("[SUCCESS] Data transfer complete.\n");
-
+				
 
 				
 			}
