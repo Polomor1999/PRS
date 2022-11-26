@@ -34,7 +34,6 @@ void send_file_data(FILE* fp, int sockfd, struct sockaddr_in addr)
 
   while (flag) //je lit tout d'un coup
   {
-	sleep(1);
 	lendata=fread(buffer, 1,MAXLINE, fp);//taille que j'ai reussi a lire dans mon file
 	flag = !(lendata<1024); //flag=0 si on atteint la fin du file
 
@@ -76,7 +75,7 @@ void send_file_data(FILE* fp, int sockfd, struct sockaddr_in addr)
   sendto(sockfd, buffer, MAXLINE, 0, (struct sockaddr*)&addr, sizeof(addr));
 
   fclose(fp);
-  
+
 }
 
 
@@ -115,7 +114,7 @@ else
 	char* message3 = "let'sgo";
 	void sig_chld(int);
 
-	
+
 	//listenfd = socket(AF_INET, SOCK_STREAM, 0);
 	bzero(&servaddr, sizeof(servaddr));
 	servaddr.sin_family = AF_INET;
@@ -137,7 +136,7 @@ else
 	//create new udp socket with new port
 	bzero(&servaddr1, sizeof(servaddr1));
 	servaddr1.sin_family = AF_INET;
-	servaddr1.sin_addr.s_addr = inet_addr("134.214.202.246");
+	servaddr1.sin_addr.s_addr = inet_addr("134.214.202.48");
 	servaddr1.sin_port = htons(1222);
 	newsocketudp = socket(AF_INET, SOCK_DGRAM, 0);
 
@@ -149,7 +148,7 @@ else
 	for (;;) { //mettre la boucle for apres l'ouvertiure de connexion + rajouterfork pr gerer plusisuers client 
 
 		// set socketudp in readset
-	
+
 		FD_SET(socketudp, &rset);
 
         //OUVERTURE DE CONNEXION
@@ -171,30 +170,25 @@ else
 			puts(buffer);
 			char *filename = "photo.jpeg";
   			FILE *fp = fopen(filename, "rb");
-
+			while(fgets(buffer2, MAXLINE, fp) != NULL){
 				//ouverture nouvelle socket pr comm exclusivement avec le client 
 				bzero(buffer2, sizeof(buffer2));
 				printf("\nMessage from Client on newsocket: ");
-			while(1){
 				b = recvfrom(newsocketudp, buffer2, sizeof(buffer2), 0,(struct sockaddr*)&cliaddr, &len);
 				//puts(buffer2);
 				sendto(newsocketudp, (const char*)message2, strlen(message2), 0,(struct sockaddr*)&cliaddr, sizeof(cliaddr));
-				
+
 
 					// Sending the file data to the server
 				send_file_data(fp, newsocketudp, cliaddr);
 				printf("[SUCCESS] Data transfer complete.\n");
-				
 
-				
+
+
 			}
-		
+
 		}
 	}
 
-	
+
 }
-
-
-
-
