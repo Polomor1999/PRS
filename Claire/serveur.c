@@ -25,8 +25,8 @@ void send_file_data(FILE* fp, int sockfd, struct sockaddr_in addr)
   long compteur = 0;
   char buffer[MAXLINE];
   bzero(buffer, MAXLINE);
-  char numero[SEGMENT_LENGTH];
-  bzero(numero, SEGMENT_LENGTH);
+  char bufftotal[SEGMENT_LENGTH];
+  bzero(bufftotal, SEGMENT_LENGTH);
   flag = 1;
   // Sending the data
 
@@ -45,13 +45,20 @@ void send_file_data(FILE* fp, int sockfd, struct sockaddr_in addr)
 	printf("%d\n",lendata);
 
 	//long to char 
-	sprintf(numero, "%06d\n", compteur);
-	printf("numero : %s\n",numero);
+	sprintf(bufftotal, "%06d\n", compteur);
+	printf("numero : %s\n",bufftotal);
+	
+	//if (strcmp(buffer2,ACK + numero) ==0 ){
+		//send apres avoir recu le ack 
+
 	//add compteur to buffer
-	memcpy(numero+6,buffer,lendata);
+	memcpy(bufftotal+6,buffer,lendata);
+
+
+	
 
 	//printf("[SENDING] Data: %s\n",buffer);
-    n = sendto(sockfd, numero, lendata+6, 0, (struct sockaddr*)&addr, sizeof(addr));
+    n = sendto(sockfd, bufftotal, lendata+6, 0, (struct sockaddr*)&addr, sizeof(addr));
     if (n == -1)
     {
       perror("[ERROR] sending data to the client.");
@@ -66,12 +73,12 @@ void send_file_data(FILE* fp, int sockfd, struct sockaddr_in addr)
     fwrite(buffer,lendata,1,f2);*/
 
     bzero(buffer, MAXLINE);
-	bzero(numero, SEGMENT_LENGTH);
+	bzero(bufftotal, SEGMENT_LENGTH);
   }
  // fclose(f2);
 
   // Sending the 'END'
-  strcpy(buffer, "END");
+  strcpy(buffer, "FIN");
   sendto(sockfd, buffer, MAXLINE, 0, (struct sockaddr*)&addr, sizeof(addr));
 
   fclose(fp);
@@ -183,13 +190,13 @@ else
 				sendto(newsocketudp, (const char*)message2, strlen(message2), 0,(struct sockaddr*)&cliaddr, sizeof(cliaddr));
 				char *filename = "fleur.jpg";
   				FILE *fp = fopen(filename, "rb");
-
+				
 				// Sending the file data to the server
 				send_file_data(fp, newsocketudp, cliaddr);
 				printf("[SUCCESS] Data transfer complete.\n");
 				//close(newsocketudp);
 
-				//}
+				
 			}
 		
 		}
