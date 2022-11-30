@@ -45,7 +45,8 @@ struct thread_args //threads pour continuer le code quand les timesout dorment
 };
 
 void * timeout_THREAD(void* param){
-
+	//lancer le time out quand on recoit un ack$
+	//le fermer quand on recoit le bon ack
 }
 
 
@@ -68,6 +69,7 @@ void *thread_ack(int sockfd) {
 		}
 	}
 
+	//quand on recoit 3 fois le meme ack => on le renvoit 
 	//slow start ici 
 
 }
@@ -107,8 +109,8 @@ void transfert_data(int datasocket){
 		rewind(fileptr); //remet au début du file ou fseek(fileptr,0,SEEK_STart)
 		nb_seg = (file_len / (BUFF_SIZE-6))  + 1; //-6 car 6 attribué aux numéro de séquence 
 
-		pthread_t thread_ack_id;
-		pthread_create(thread_ack_id,NULL,thread_ack,datasocket); //lancer le thread pour écouter les ACK en parrallele d'envoyer les segments
+		//pthread_t thread_ack_id;
+		//pthread_create(thread_ack_id,NULL,thread_ack,datasocket); //lancer le thread pour écouter les ACK en parrallele d'envoyer les segments
 
 
 		 
@@ -237,6 +239,10 @@ int main(int argc,char* argv[])
 			mb_octet = sendto(socketudp, (const char*)message, strlen(message), 0,
 			(struct sockaddr*)&cliaddr, sizeof(cliaddr));
 			//printf("octet:%d\n", mb_octet);
+		
+		if (strcmp(buff_CON,"ACK") ==0 ){
+		//puts(buff_CON);
+		printf("\nFin d'ouverture de connexion ");
 
 			if (fork()==0){
 				close(socketudp);
@@ -244,9 +250,7 @@ int main(int argc,char* argv[])
 				exit(0);
 			}
 		}
-		if (strcmp(buff_CON,"ACK") ==0 ){
-			//puts(buff_CON);
-			printf("\nFin d'ouverture de connexion ");
+		
 		}
 	}
 
