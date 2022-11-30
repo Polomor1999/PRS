@@ -16,7 +16,7 @@
 #include <pthread.h>
 
 
-#define BUFF_SIZE 1024
+#define BUFF_SIZE 1030
 #define SEGMENT_LENGTH 1030
 
 int nb_seg;
@@ -68,6 +68,7 @@ void *thread_ack(int sockfd) {
 
 	while(1){
 		recvfrom(sockfd,bufferACK,sizeof(bufferACK),0,(struct sockaddr*)&cliaddr, &len);
+		puts(bufferACK);
 		memcpy(numero_buff,bufferACK+3,6); //recuperer les numéros de séquence
    		numero_int = strtol(numero_buff, &ptr, 10); //conv str en int base 10
 		if (numero_int > last_ACK){
@@ -81,7 +82,7 @@ void *thread_ack(int sockfd) {
 			tab[0] = numero_int;
 
 			if (tab[i] ==  tab[i-1] & tab[i] == tab[i-2]){ //on recoit 3 fois le ack donc ca n'a pas été retransmit
-				ACK_perdu_flag = tab[i];
+				ACK_perdu_flag = tab[i]+1;
 			}
 		} 
 			
@@ -94,23 +95,21 @@ void *thread_ack(int sockfd) {
 }
 
 
-void transfert_data(int datasocket){
-
+void transfert_data(int datasocket, struct sockaddr_in addr){
 
 	char buff_DATA[BUFF_SIZE];
-	struct sockaddr_in cliaddr;
-	memset((char*)&cliaddr,0,sizeof(cliaddr));
+	memset((char*)&addr,0,sizeof(addr));
 	int connection_flag = 1; //tant qu'on a pas recu le ackFIN 
 	int Swindow = max_window;
 
-
+	
 	while (connection_flag){
-		int len = sizeof(cliaddr);
+		int len = sizeof(addr);
 		bzero(buff_DATA,sizeof(buff_DATA));
 		int open_flag = 1; // passe à 0 si on a ouvert le fichier du client suivant (sinon means il y a encore des ack de celui d'avant )
 		FILE *fileptr;
 		while (open_flag){
-			recvfrom(datasocket,buff_DATA,sizeof(buff_DATA),0,(struct sockaddr*)&cliaddr, &len);
+			recvfrom(datasocket,buff_DATA,sizeof(buff_DATA),0,(struct sockaddr*)&addr, &len);
 			fileptr = fopen(buff_DATA, "rb");
 			bzero(buff_DATA,sizeof(buff_DATA));
 			if (fileptr==NULL){
@@ -120,13 +119,12 @@ void transfert_data(int datasocket){
 				open_flag = 0; 
 			}
 		}
-
 		//CALCULER LE NOMBRE DE SEGMENT
 		fseek(fileptr,0,SEEK_END); //déplace le pointeur vers la fin du fichier pr touver la taille apres 
 		long file_len = ftell(fileptr); // Dit la taille en byte du offset par rapport au debut di ficher -> la taille du fichier dans ce cas
 		rewind(fileptr); //remet au début du file ou fseek(fileptr,0,SEEK_STart)
 		nb_seg = (file_len / (BUFF_SIZE-6))  + 1; //-6 car 6 attribué aux numéro de séquence 
-
+		printf("\nnbr segment : %d",nb_seg);
 		//pthread_t thread_ack_id;
 		//pthread_create(thread_ack_id,NULL,thread_ack,datasocket); //lancer le thread pour écouter les ACK en parrallele d'envoyer les segments
 
@@ -138,42 +136,44 @@ void transfert_data(int datasocket){
 		int lendata;
 		long compteur = 0;
 		while(last_ACK < nb_seg){ //tant qu'on est pas à la fin 
-			
 			//gestion du time out 
 			if (timeout_flag){
 				//to do 
 				//si timesout atteint on remet max_window = 1
 				//seuil = maxwindows/2 (a changer si possible)
-
+				
 				timeout_flag = 0;
 				}
 		
 			while (Swindow > 0 & last_SND < nb_seg){
 				compteur++;
-				printf("avant envoie\n");
 				bzero(buff_DATA,sizeof(buff_DATA));
 				sprintf(buff_DATA, "%06d\n", compteur);
 				fseek(fileptr,last_SND*(BUFF_SIZE-6),SEEK_SET); //se deplacer dans le file (seek_set = on part du début du fichier et on avance numéro seg * taille buff-6
 				lendata=fread(buff_DATA+6, 1,BUFF_SIZE, fileptr);//ranger la data a position 6
 
-				sendto(datasocket, buff_DATA, lendata+6, 0, (struct sockaddr*)&cliaddr, sizeof(cliaddr));
+				sendto(datasocket, buff_DATA, lendata, 0, (struct sockaddr*)&addr, sizeof(addr));
+				printf("data send par serveur\n");
+				puts(buff_DATA);
 				//start timeoutthread
 				last_SND ++;
 				Swindow --;
-				
 			}
-
+			/*
 			while (ACK_perdu_flag != 0){
 				bzero(buff_DATA,sizeof(buff_DATA));
 				fseek(fileptr,ACK_perdu_flag*(BUFF_SIZE-6),SEEK_SET); //se place au niveau du segment manquant 
 				lendata=fread(buff_DATA+6, 1,BUFF_SIZE, fileptr);//ranger la data a position 6
-				sendto(datasocket, buff_DATA, lendata+6, 0, (struct sockaddr*)&cliaddr, sizeof(cliaddr));
+				sendto(datasocket, buff_DATA, lendata+6, 0, (struct sockaddr*)&addr, sizeof(addr));
 			}
+			*/
+
 			bzero(buff_DATA,sizeof(buff_DATA));
 			//int var_ACK;
 			//pthread_mutex_lock(&ackMutex);
 			//var_ACK = last_ACK;
 			//pthread_mutex_unlock(&ackMutex);
+			last_ACK ++;
 			Swindow = last_ACK - (last_SND - max_window); // taille de data que tu peux encore envoyer dans ta fenetre de mla taille max_window
 			if (Swindow < 0){
 				Swindow = 0;
@@ -182,7 +182,13 @@ void transfert_data(int datasocket){
 			
 
 		}
+		printf("\nnbr ack lasxt : %d",last_ACK);
+		sleep(1);
+		strcpy(buff_DATA, "FIN");
+  		sendto(datasocket, buff_DATA, BUFF_SIZE, 0, (struct sockaddr*)&addr, sizeof(addr));
+
 		fclose(fileptr);
+		connection_flag=0;
 	}			
 }
 
@@ -274,13 +280,13 @@ int main(int argc,char* argv[])
 		if (strcmp(buff_CON,"ACK") ==0 ){
 			puts(buff_CON);
 			printf("\nFin d'ouverture de connexion ");
-			pid_t pid = fork();
+			//pid_t pid = fork();
 
-			if (pid == 0){
+			//if (pid == 0){
 				close(socketudp);
-				transfert_data(datasocket);
+				transfert_data(datasocket,cliaddr);
 				exit(0);
-			}
+			//}
 		}
 		
 		
@@ -289,6 +295,10 @@ int main(int argc,char* argv[])
 
 }
 
+//to do 
+//sliding windows pour envoyer que a max 94 pr la fleur 
+//RTT
+//fast retransmit 
 
 
 /*
