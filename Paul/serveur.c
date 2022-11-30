@@ -102,7 +102,6 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 		long file_len = ftell(fileptr); // Dit la taille en byte du offset par rapport au debut di ficher -> la taille du fichier dans ce cas
 		rewind(fileptr); //remet au début du file ou fseek(fileptr,0,SEEK_STart)
 		nb_seg = (file_len / (BUFF_SIZE-6))  + 1; //-6 car 6 attribué aux numéro de séquence 
-
 		//pthread_t thread_ack_id;
 		//pthread_create(thread_ack_id,NULL,thread_ack,datasocket); //lancer le thread pour écouter les ACK en parrallele d'envoyer les segments
 
@@ -129,8 +128,10 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 				sprintf(buff_DATA, "%06d\n", compteur);
 				fseek(fileptr,last_SND*(BUFF_SIZE-6),SEEK_SET); //se deplacer dans le file (seek_set = on part du début du fichier et on avance numéro seg * taille buff-6
 				lendata=fread(buff_DATA+6, 1,BUFF_SIZE, fileptr);//ranger la data a position 6
-
-				sendto(datasocket, buff_DATA, lendata+6, 0, (struct sockaddr*)&addr, sizeof(addr));
+				printf("%d\n",lendata);
+				sendto(datasocket, buff_DATA, lendata, 0, (struct sockaddr*)&addr, sizeof(addr));
+				
+				//recvfrom(datasocket, buff_DATA, sizeof(buff_DATA), 0,(struct sockaddr*)&addr, &len);
 				//start timeoutthread
 				last_SND ++;
 				Swindow --;
@@ -247,7 +248,7 @@ int main(int argc,char* argv[])
 			printf("Fin d'ouverture de connexion \n");
 			//pid_t pid = fork();
 			//if (pid==0){
-				//close(socketudp);
+				close(socketudp);
 				transfert_data(datasocket, cliaddr);
 				exit(0);
 			//}
