@@ -68,11 +68,6 @@ void send_file_data(FILE* fp, int sockfd, struct sockaddr_in addr)
   {
 	lendata=fread(buffer, 1,MAXLINE, fp);//taille que j'ai reussi a lire dans mon file
 	flag = !(lendata<1024); //flag=0 si on atteint la fin du file
-
-	// convertir int to char en respectant le nb ce charcatere 
-	// mettre au début du buffer
-	// remplir le buffer avec les datas
-	//printf("Data: %s\n",buffer);
     compteur++;
 	printf("%d\n",lendata);
 
@@ -90,19 +85,9 @@ void send_file_data(FILE* fp, int sockfd, struct sockaddr_in addr)
       exit(1);
     }
 
-/* FOR DEBUG
-	bzero(buffer, MAXLINE);
-	memcpy(buffer,numero+6,lendata);
-    //printf("[RECEVING] Data: ACK%d %s\n",buffer);
-    //fprintf(fp, "%s", buffer);
-    fwrite(buffer,lendata,1,f2);*/
-
     bzero(buffer, MAXLINE);
 	bzero(numero, SEGMENT_LENGTH);
   }
- // fclose(f2);
-
-  // Sending the 'FIN'
   sleep(1);
   strcpy(buffer, "FIN");
   sendto(sockfd, buffer, MAXLINE, 0, (struct sockaddr*)&addr, sizeof(addr));
