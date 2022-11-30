@@ -12,116 +12,181 @@
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <time.h>
+#include <pthread.h>
 
 
-#define MAXLINE 1024
+#define BUFF_SIZE 1024
 #define SEGMENT_LENGTH 1030
 
+int nb_seg;
+int last_ACK = 0; //dernier ack recu 
+int last_SND = 0; //dernier segment envoyé
+int timeout_flag = 0; //=1 si le timeout s'écoule et que ack non recu
+double max_window = 1;
+int ssthresh = 350;
+int slowstart_flag = 0;
+//int ffrts_flag = 0;
+//int ffrts_ACK = 0;
+//int ffrts_max = 2;
 
-void send_file_data(FILE* fp, int sockfd, struct sockaddr_in addr)
+//double timeout_RTT = 10;
+//double estimated_RTT = 0;
+//double dev_RTT = 0;
+//double RTT = 0;
+
+struct timeval timeout_RTT_time;
+pthread_mutex_t ackMutex = PTHREAD_MUTEX_INITIALIZER;//pb baguettes chinoises 
+
+struct thread_args //threads pour continuer le code quand les timesout dorment 
 {
-  int n,flag,lendata;
-//numéro de sequence 
-  long compteur = 0;
-  char buffer[MAXLINE];
-  bzero(buffer, MAXLINE);
-  char bufftotal[SEGMENT_LENGTH];
-  bzero(bufftotal, SEGMENT_LENGTH);
-  flag = 1;
-  // Sending the data
+	int socketDATA;
+	long * pointerArray[];
+};
 
-//  FILE* f2 = fopen("kjh.pdf", "wb");
+void * timeout_THREAD(void* param){
 
-  while (flag) //je lit tout d'un coup
-  {
-	lendata=fread(buffer, 1,MAXLINE, fp);//taille que j'ai reussi a lire dans mon file
-	flag = !(lendata<1024); //flag=0 si on atteint la fin du file
-
-	// convertir int to char en respectant le nb ce charcatere 
-	// mettre au début du buffer
-	// remplir le buffer avec les datas
-	//printf("Data: %s\n",buffer);
-    compteur++;
-	printf("%d\n",lendata);
-
-	//long to char 
-	sprintf(bufftotal, "%06d\n", compteur);
-	printf("numero : %s\n",bufftotal);
-	
-	//if (strcmp(buffer2,ACK + numero) ==0 ){
-		//send apres avoir recu le ack 
-
-	//add compteur to buffer
-	memcpy(bufftotal+6,buffer,lendata);
-
-
-	
-
-	//printf("[SENDING] Data: %s\n",buffer);
-    n = sendto(sockfd, bufftotal, lendata+6, 0, (struct sockaddr*)&addr, sizeof(addr));
-    if (n == -1)
-    {
-      perror("[ERROR] sending data to the client.");
-      exit(1);
-    }
-
-/* FOR DEBUG
-	bzero(buffer, MAXLINE);
-	memcpy(buffer,numero+6,lendata);
-    //printf("[RECEVING] Data: ACK%d %s\n",buffer);
-    //fprintf(fp, "%s", buffer);
-    fwrite(buffer,lendata,1,f2);*/
-
-    bzero(buffer, MAXLINE);
-	bzero(bufftotal, SEGMENT_LENGTH);
-  }
- // fclose(f2);
-
-  // Sending the 'END'
-  strcpy(buffer, "FIN");
-  sendto(sockfd, buffer, MAXLINE, 0, (struct sockaddr*)&addr, sizeof(addr));
-
-  fclose(fp);
-  
 }
 
 
+void *thread_ack(int sockfd) {
+	//recevoir buffer d_u client 
+	// recuperer le numero
+	//si numero > last ack on change last ack sinon on fait rien 
+	char bufferACK[9];
+	char numero_buff[6];
+	struct sockaddr_in cliaddr;
+	int len = sizeof(cliaddr);
+	char *ptr;
+   	long numero_int;
+	while(1){
+		recvfrom(sockfd,bufferACK,sizeof(bufferACK),0,(struct sockaddr*)&cliaddr, &len);
+		memcpy(numero_buff,bufferACK+3,6); //recuperer les numéros de séquence
+   		numero_int = strtol(numero_buff, &ptr, 10); //conv str en int base 10
+		if (numero_int > last_ACK){
+			last_ACK = numero_int;
+		}
+	}
+
+	//slow start ici 
+
+}
+
+
+void transfert_data(int datasocket){
+
+
+	char buff_DATA[BUFF_SIZE];
+	struct sockaddr_in cliaddr;
+	memset((char*)&cliaddr,0,sizeof(cliaddr));
+	int connection_flag = 1; //tant qu'on a pas recu le ackFIN 
+	int Swindow = max_window;
+
+
+	while (connection_flag){
+		int len = sizeof(cliaddr);
+		bzero(buff_DATA,sizeof(buff_DATA));
+		int open_flag = 1; // passe à 0 si on a ouvert le fichier du client suivant (sinon means il y a encore des ack de celui d'avant )
+		FILE *fileptr;
+		while (open_flag){
+			
+			recvfrom(datasocket,buff_DATA,sizeof(buff_DATA),0,(struct sockaddr*)&cliaddr, &len);
+			fileptr = fopen(buff_DATA, "rb");
+			bzero(buff_DATA,sizeof(buff_DATA));
+			if (fileptr==NULL){
+				printf("\n erreur sur l'ouverture du fichier");
+			}
+			else {
+				open_flag = 0; 
+			}
+		}
+
+		//CALCULER LE NOMBRE DE SEGMENT
+		fseek(fileptr,0,SEEK_END); //déplace le pointeur vers la fin du fichier pr touver la taille apres 
+		long file_len = ftell(fileptr); // Dit la taille en byte du offset par rapport au debut di ficher -> la taille du fichier dans ce cas
+		rewind(fileptr); //remet au début du file ou fseek(fileptr,0,SEEK_STart)
+		nb_seg = (file_len / (BUFF_SIZE-6))  + 1; //-6 car 6 attribué aux numéro de séquence 
+
+		pthread_t thread_ack_id;
+		pthread_create(thread_ack_id,NULL,thread_ack,datasocket); //lancer le thread pour écouter les ACK en parrallele d'envoyer les segments
+
+
+		 
+		//chercker si on est en slow start quand 
+
+
+		int lendata;
+		long compteur = 0;
+		while(last_ACK < nb_seg){ //tant qu'on est pas à la fin 
+			
+			//gestion du time out 
+			if (timeout_flag){
+				//to do 
+				//si timesout atteint on remet max_window = 1
+				//seuil = maxwindows/2 (a changer si possible)
+
+				timeout_flag = 0;
+				}
+		
+			while (Swindow > 0 & last_SND < nb_seg){
+				compteur++;
+				bzero(buff_DATA,sizeof(buff_DATA));
+				sprintf(buff_DATA, "%06d\n", compteur);
+				fseek(fileptr,last_SND*(BUFF_SIZE-6),SEEK_SET); //se deplacer dans le file (seek_set = on part du début du fichier et on avance numéro seg * taille buff-6
+				lendata=fread(buff_DATA+6, 1,BUFF_SIZE, fileptr);//ranger la data a position 6
+
+				sendto(datasocket, buff_DATA, lendata+6, 0, (struct sockaddr*)&cliaddr, sizeof(cliaddr));
+				//start timeoutthread
+				last_SND ++;
+				Swindow --;
+				
+			}
+			bzero(buff_DATA,sizeof(buff_DATA));
+			//int var_ACK;
+			//pthread_mutex_lock(&ackMutex);
+			//var_ACK = last_ACK;
+			//pthread_mutex_unlock(&ackMutex);
+			Swindow = last_ACK - (last_SND - max_window); // taille de data que tu peux encore envoyer dans ta fenetre de mla taille max_window
+			if (Swindow < 0){
+				Swindow = 0;
+			} 	
+			fclose(fileptr);
+
+		}
+	}			
+}
 
 
 int main(int argc,char* argv[])
 {
     int port;
 
-if (argc < 2)
-{
-    printf("Too few arguments given.\n");
-    exit(1);
-}
-else if (argc > 2)
-{
-    printf("Too many arguments given.\n");
-    exit(1);
-}
-else
-{
-    port = atoi(argv[1]);
-}
+	if (argc < 2)
+	{
+		printf("Too few arguments given.\n");
+		exit(1);
+	}
+	else if (argc > 2)
+	{
+		printf("Too many arguments given.\n");
+		exit(1);
+	}
+	else
+	{
+		port = atoi(argv[1]);
+	}
 
-	int listenfd, connfd, socketudp, nready, maxfdp1,newsocketudp,mb_octet;
-	char buffer[MAXLINE];
-	char buffer2[MAXLINE];
-	pid_t childpid;
+	int listenfd, connfd, socketudp, nready, maxfdp1,datasocket,mb_octet;
+	char buff_CON[BUFF_SIZE];
+	bzero(buff_CON, BUFF_SIZE);
 	fd_set rset;
 	ssize_t n,b;
 	socklen_t len;
-	const int on = 1;
-	struct sockaddr_in cliaddr, servaddr,servaddr1;
+	struct sockaddr_in cliaddr, servaddr,dataaddr;
 	char* message = "SYN-ACK1222"; //nouveau port pour socket d'écoute avec le client 
-	char* message2 = "fleur.jpg";
-	char* message3 = "let'sgo";
-	void sig_chld(int);
+	//void sig_chld(int);
 
-	
+
 	//listenfd = socket(AF_INET, SOCK_STREAM, 0);
 	bzero(&servaddr, sizeof(servaddr));
 	servaddr.sin_family = AF_INET;
@@ -133,7 +198,9 @@ else
 	//listen(listenfd, 10);
 
 	/* create UDP socket */
+	int optvaludp=1;
 	socketudp = socket(AF_INET, SOCK_DGRAM, 0);
+	setsockopt(socketudp,SOL_SOCKET,SO_REUSEADDR,(const void *)&optvaludp,sizeof(int)); //eviter blocage du port
 	// binding server addr structure to udp sockfd
 	bind(socketudp, (struct sockaddr*)&servaddr, sizeof(servaddr));
 
@@ -141,70 +208,132 @@ else
 	FD_ZERO(&rset);
 
 	//create new udp socket with new port
-	bzero(&servaddr1, sizeof(servaddr1));
-	servaddr1.sin_family = AF_INET;
-	servaddr1.sin_addr.s_addr = htonl(INADDR_ANY);
-	servaddr1.sin_port = htons(1222);
-	newsocketudp = socket(AF_INET, SOCK_DGRAM, 0);
+	bzero(&dataaddr, sizeof(dataaddr));
+	dataaddr.sin_family = AF_INET;
+	dataaddr.sin_addr.s_addr = inet_addr(INADDR_ANY);
+	dataaddr.sin_port = htons(1222);
+	datasocket = socket(AF_INET, SOCK_DGRAM, 0);
 
+	int optvaldata = 1;
+	setsockopt(datasocket,SOL_SOCKET,SO_REUSEADDR,(const void *)&optvaldata,sizeof(int)); //eviter blocage du port
     // Bind the socket with the server address 
-  	bind(newsocketudp, (struct sockaddr*)&servaddr1, sizeof(servaddr));
+  	bind(datasocket, (struct sockaddr*)&dataaddr, sizeof(servaddr));
 
 
 
 	for (;;) { //mettre la boucle for apres l'ouvertiure de connexion + rajouterfork pr gerer plusisuers client 
 
-		// set socketudp in readset
-	
-		FD_SET(socketudp, &rset);
-
         //OUVERTURE DE CONNEXION
 		// if udp socket is readable receive the message.
 		len = sizeof(cliaddr);
-		bzero(buffer, sizeof(buffer));
-		printf("\nMessage from Client on socketbasic: ");
-		n = recvfrom(socketudp, buffer, sizeof(buffer), 0,
+		bzero(buff_CON, sizeof(buff_CON));
+		printf("\nMessage du Client sur socketudp: ");
+		n = recvfrom(socketudp, buff_CON, sizeof(buff_CON), 0,
 					(struct sockaddr*)&cliaddr, &len);
 
-		if (strcmp(buffer,"SYN") ==0 ){
-			puts(buffer);
+		if (strcmp(buff_CON,"SYN") ==0 ){
+			//puts(buff_CON);
 			//puts(message);
 			mb_octet = sendto(socketudp, (const char*)message, strlen(message), 0,
 			(struct sockaddr*)&cliaddr, sizeof(cliaddr));
 			//printf("octet:%d\n", mb_octet);
-		}
-		if (strcmp(buffer,"ACK") ==0 ){
-			puts(buffer);
-			//FIN D'OUVERTURE DE CONNEXION
-			//sendto(socketudp, (const char*)message3, strlen(message3), 0,(struct sockaddr*)&cliaddr, sizeof(cliaddr));
-			//printf("FIN D'OUVERTURE DE CONNEXION\n");
 
-			while(1){
-				//ouverture nouvelle socket pr comm exclusivement avec le client 
-				bzero(buffer2, sizeof(buffer2));
-				printf("\nMessage from Client on newsocket: ");
-				b = recvfrom(newsocketudp, buffer2, sizeof(buffer2), 0,(struct sockaddr*)&cliaddr, &len);
-				//printf("octets recus :%d\n", b);
-				//if (strcmp(buffer2,"GGO") ==0 ){
-				//puts(buffer2);
-				sendto(newsocketudp, (const char*)message2, strlen(message2), 0,(struct sockaddr*)&cliaddr, sizeof(cliaddr));
-				char *filename = "fleur.jpg";
-  				FILE *fp = fopen(filename, "rb");
-				
-				// Sending the file data to the server
-				send_file_data(fp, newsocketudp, cliaddr);
-				printf("[SUCCESS] Data transfer complete.\n");
-				//close(newsocketudp);
-
-				
+			if (fork()==0){
+				close(socketudp);
+				transfert_data(datasocket);
+				exit(0);
 			}
-		
+		}
+		if (strcmp(buff_CON,"ACK") ==0 ){
+			//puts(buff_CON);
+			printf("\nFin d'ouverture de connexion ");
 		}
 	}
 
-	
+
 }
 
 
 
+/*
+printf("\nMessage du Client sur datasocket: ");
+			while(1){
+				//ouverture nouvelle socket pr comm exclusivement avec le client 
+				//bzero(buff_DATA, sizeof(buff_DATA));
+				//printf("\nMessage from Client on newsocket: ");
+				//b = recvfrom(datasocket, buff_DATA, sizeof(buff_DATA), 0,(struct sockaddr*)&cliaddr, &len);
+				//puts(buff_DATA);
+				//sendto(datasocket, (const char*)message2, strlen(message2), 0,(struct sockaddr*)&cliaddr, sizeof(cliaddr));
 
+
+				// Sending the file data to the server
+				int n,flag,lendata;
+				//numéro de sequence 
+				long compteur = 0;
+				char buff_CON[BUFF_SIZE];
+				bzero(buff_CON, BUFF_SIZE);
+				char numero[SEGMENT_LENGTH];
+				bzero(numero, SEGMENT_LENGTH);
+				struct timespec start, finish, delta;
+				flag = 1;
+				// Sending the data
+
+				//  FILE* f2 = fopen("kjh.pdf", "wb");
+
+				while (1) //je lit tout d'un coup
+				{
+					lendata=fread(buff_CON, 1,BUFF_SIZE, fp);//taille que j'ai reussi a lire dans mon file
+					flag = !(lendata<1024); //flag=0 si on atteint la fin du file
+
+					// convertir int to char en respectant le nb ce charcatere 
+					// mettre au début du buff_CON
+					// remplir le buff_CON avec les datas
+					//printf("Data: %s\n",buff_CON);
+					compteur++;
+					printf("%d\n",lendata);
+
+					//long to char 
+					sprintf(numero, "%06d\n", compteur);
+					printf("numero : %s\n",numero);
+					//add compteur to buff_CON
+					memcpy(numero+6,buff_CON,lendata);
+
+					//printf("[SENDING] Data: %s\n",buff_CON);
+					n = sendto(datasocket, numero, lendata+6, 0, (struct sockaddr*)&cliaddr, sizeof(cliaddr));
+
+    				//clock_gettime(CLOCK_REALTIME, &start);
+					if (n == -1)
+					{
+					perror("[ERROR] sending data to the server.");
+					exit(1);
+					}
+					recvfrom(datasocket, buff_DATA, sizeof(buff_DATA), 0,(struct sockaddr*)&cliaddr, &len);
+					//clock_gettime(CLOCK_REALTIME, &finish);
+					puts(buff_DATA);
+
+					bzero(buff_CON, BUFF_SIZE);
+					bzero(numero, SEGMENT_LENGTH);
+				}
+				// fclose(f2);
+
+				// Sending the 'FIN'
+				//sleep(1);
+				strcpy(buff_CON, "FIN");
+				sendto(datasocket, buff_CON, BUFF_SIZE, 0, (struct sockaddr*)&cliaddr, sizeof(cliaddr));
+
+				fclose(fp);
+				// Sending the file data to the server
+				//send_file_data(fp, datasocket, cliaddr);
+				printf("[SUCCESS] Data transfer complete.\n");
+				
+				close(datasocket);
+    			//clock_gettime(CLOCK_REALTIME, &start);
+    			//sleep(1);
+    			//clock_gettime(CLOCK_REALTIME, &finish);
+    			//sub_timespec(start, finish, &delta);
+   				//printf("%d.%.9ld\n", (int)delta.tv_sec, delta.tv_nsec);
+
+
+
+			} 
+*/
