@@ -17,24 +17,39 @@
 
 #define MAXLINE 1024
 #define SEGMENT_LENGTH 1030
+int64_t timeOut, estimatedRTT = 1000, deviation = 1, difference = 0;
 
 enum { NS_PER_SECOND = 1000000000 };
-
-void sub_timespec(struct timespec t1, struct timespec t2, struct timespec *td)
+int set_timeout(int sockfd, int usec)
 {
-    td->tv_nsec = t2.tv_nsec - t1.tv_nsec;
-    td->tv_sec  = t2.tv_sec - t1.tv_sec;
-    if (td->tv_sec > 0 && td->tv_nsec < 0)
-    {
-        td->tv_nsec += NS_PER_SECOND;
-        td->tv_sec--;
-    }
-    else if (td->tv_sec < 0 && td->tv_nsec > 0)
-    {
-        td->tv_nsec -= NS_PER_SECOND;
-        td->tv_sec++;
-    }
+	if (usec < 0)
+		return -1;
+	struct timeval tv;
+	tv.tv_sec = 0;
+	tv.tv_usec = usec; 
+	if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+    	perror("sender: setsockopt");
+	}
+	return 0;
 }
+
+uint64_t time_now()
+{
+	struct timeval current;
+	gettimeofday(&current, 0);
+	return current.tv_sec * 1000000 + current.tv_usec;
+}
+
+void update_timeout(uint64_t sentTime)
+{
+	uint64_t sampleRTT = time_now() - sentTime;
+	estimatedRTT = 0.875 * estimatedRTT + 0.125 * sampleRTT; // alpha = 0.875
+	deviation += (0.25 * ( abs(sampleRTT - estimatedRTT) - deviation)); //delta = 0.25
+	timeOut = (estimatedRTT + 4 * deviation); // mu = 1, phi = 4
+	timeOut = timeOut/5;
+}
+
+
 void send_file_data(FILE* fp, int sockfd, struct sockaddr_in addr)
 {
   int n,flag,lendata;
