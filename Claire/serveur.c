@@ -20,12 +20,13 @@
 #define SEGMENT_LENGTH 1030
 
 int nb_seg;
-int last_ACK = 0; //dernier ack recu 
+int last_ACK = 1; //dernier ack recu 
 int last_SND = 0; //dernier segment envoyé
 int timeout_flag = 0; //=1 si le timeout s'écoule et que ack non recu
-double max_window = 1;
+int max_window = 1;
 int ssthresh = 350;
 int slowstart_flag = 0;
+int ACK_perdu_flag = 0;
 //int ffrts_flag = 0;
 //int ffrts_ACK = 0;
 //int ffrts_max = 2;
@@ -38,11 +39,13 @@ int slowstart_flag = 0;
 struct timeval timeout_RTT_time;
 pthread_mutex_t ackMutex = PTHREAD_MUTEX_INITIALIZER;//pb baguettes chinoises 
 
+/*
 struct thread_args //threads pour continuer le code quand les timesout dorment 
 {
 	int socketDATA;
 	long * pointerArray[];
 };
+*/ 
 
 void * timeout_THREAD(void* param){
 	//lancer le time out quand on recoit un ack$
@@ -56,10 +59,13 @@ void *thread_ack(int sockfd) {
 	//si numero > last ack on change last ack sinon on fait rien 
 	char bufferACK[9];
 	char numero_buff[6];
+	int i;
 	struct sockaddr_in cliaddr;
 	int len = sizeof(cliaddr);
 	char *ptr;
    	long numero_int;
+	int tab[3]={0,-1,-2};
+
 	while(1){
 		recvfrom(sockfd,bufferACK,sizeof(bufferACK),0,(struct sockaddr*)&cliaddr, &len);
 		memcpy(numero_buff,bufferACK+3,6); //recuperer les numéros de séquence
@@ -67,6 +73,19 @@ void *thread_ack(int sockfd) {
 		if (numero_int > last_ACK){
 			last_ACK = numero_int;
 		}
+
+		for (i = 0; i < 3; i++){
+			//decaler indice
+			tab[2] = tab[1];
+			tab[1] = tab[0];
+			tab[0] = numero_int;
+
+			if (tab[i] ==  tab[i-1] & tab[i] == tab[i-2]){ //on recoit 3 fois le ack donc ca n'a pas été retransmit
+				ACK_perdu_flag = tab[i];
+			}
+		} 
+			
+
 	}
 
 	//quand on recoit 3 fois le meme ack => on le renvoit 
@@ -91,7 +110,6 @@ void transfert_data(int datasocket){
 		int open_flag = 1; // passe à 0 si on a ouvert le fichier du client suivant (sinon means il y a encore des ack de celui d'avant )
 		FILE *fileptr;
 		while (open_flag){
-			
 			recvfrom(datasocket,buff_DATA,sizeof(buff_DATA),0,(struct sockaddr*)&cliaddr, &len);
 			fileptr = fopen(buff_DATA, "rb");
 			bzero(buff_DATA,sizeof(buff_DATA));
@@ -132,6 +150,7 @@ void transfert_data(int datasocket){
 		
 			while (Swindow > 0 & last_SND < nb_seg){
 				compteur++;
+				printf("avant envoie\n");
 				bzero(buff_DATA,sizeof(buff_DATA));
 				sprintf(buff_DATA, "%06d\n", compteur);
 				fseek(fileptr,last_SND*(BUFF_SIZE-6),SEEK_SET); //se deplacer dans le file (seek_set = on part du début du fichier et on avance numéro seg * taille buff-6
@@ -143,6 +162,13 @@ void transfert_data(int datasocket){
 				Swindow --;
 				
 			}
+
+			while (ACK_perdu_flag != 0){
+				bzero(buff_DATA,sizeof(buff_DATA));
+				fseek(fileptr,ACK_perdu_flag*(BUFF_SIZE-6),SEEK_SET); //se place au niveau du segment manquant 
+				lendata=fread(buff_DATA+6, 1,BUFF_SIZE, fileptr);//ranger la data a position 6
+				sendto(datasocket, buff_DATA, lendata+6, 0, (struct sockaddr*)&cliaddr, sizeof(cliaddr));
+			}
 			bzero(buff_DATA,sizeof(buff_DATA));
 			//int var_ACK;
 			//pthread_mutex_lock(&ackMutex);
@@ -151,10 +177,12 @@ void transfert_data(int datasocket){
 			Swindow = last_ACK - (last_SND - max_window); // taille de data que tu peux encore envoyer dans ta fenetre de mla taille max_window
 			if (Swindow < 0){
 				Swindow = 0;
-			} 	
-			fclose(fileptr);
+			}
+			 	
+			
 
 		}
+		fclose(fileptr);
 	}			
 }
 
@@ -200,9 +228,9 @@ int main(int argc,char* argv[])
 	//listen(listenfd, 10);
 
 	/* create UDP socket */
-	int optvaludp=1;
+	//int optvaludp=1;
 	socketudp = socket(AF_INET, SOCK_DGRAM, 0);
-	setsockopt(socketudp,SOL_SOCKET,SO_REUSEADDR,(const void *)&optvaludp,sizeof(int)); //eviter blocage du port
+	//setsockopt(socketudp,SOL_SOCKET,SO_REUSEADDR,(const void *)&optvaludp,sizeof(int)); //eviter blocage du port
 	// binding server addr structure to udp sockfd
 	bind(socketudp, (struct sockaddr*)&servaddr, sizeof(servaddr));
 
@@ -212,14 +240,16 @@ int main(int argc,char* argv[])
 	//create new udp socket with new port
 	bzero(&dataaddr, sizeof(dataaddr));
 	dataaddr.sin_family = AF_INET;
-	dataaddr.sin_addr.s_addr = inet_addr(INADDR_ANY);
+	dataaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	dataaddr.sin_port = htons(1222);
 	datasocket = socket(AF_INET, SOCK_DGRAM, 0);
 
-	int optvaldata = 1;
-	setsockopt(datasocket,SOL_SOCKET,SO_REUSEADDR,(const void *)&optvaldata,sizeof(int)); //eviter blocage du port
+	//int optvaldata = 1;
+	//setsockopt(datasocket,SOL_SOCKET,SO_REUSEADDR,(const void *)&optvaldata,sizeof(int)); //eviter blocage du port
     // Bind the socket with the server address 
   	bind(datasocket, (struct sockaddr*)&dataaddr, sizeof(servaddr));
+
+
 
 
 
@@ -234,24 +264,26 @@ int main(int argc,char* argv[])
 					(struct sockaddr*)&cliaddr, &len);
 
 		if (strcmp(buff_CON,"SYN") ==0 ){
-			//puts(buff_CON);
+			puts(buff_CON);
 			//puts(message);
 			mb_octet = sendto(socketudp, (const char*)message, strlen(message), 0,
 			(struct sockaddr*)&cliaddr, sizeof(cliaddr));
 			//printf("octet:%d\n", mb_octet);
+		}
 		
 		if (strcmp(buff_CON,"ACK") ==0 ){
-		//puts(buff_CON);
-		printf("\nFin d'ouverture de connexion ");
+			puts(buff_CON);
+			printf("\nFin d'ouverture de connexion ");
+			pid_t pid = fork();
 
-			if (fork()==0){
+			if (pid == 0){
 				close(socketudp);
 				transfert_data(datasocket);
 				exit(0);
 			}
 		}
 		
-		}
+		
 	}
 
 
