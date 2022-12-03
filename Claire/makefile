@@ -1,6 +1,6 @@
 all: serveur client 
 serveur: serveur.c 
-	gcc serveur.c -o serveur
+	gcc serveur.c -o serveur -lpthread
 client: client.c
 	gcc client.c -o client
 clean:

@@ -39,38 +39,40 @@ int ACK_perdu_flag = 0;
 struct timeval timeout_RTT_time;
 pthread_mutex_t ackMutex = PTHREAD_MUTEX_INITIALIZER;//pb baguettes chinoises 
 
-/*
+
 struct thread_args //threads pour continuer le code quand les timesout dorment 
 {
-	int socketDATA;
-	long * pointerArray[];
+	int sockfd;
+	char* buff_DATA;
+	FILE *fileptr;
+	struct sockaddr_in addr;
 };
-*/ 
 
-void * timeout_THREAD(void* param){
+void *timeout_THREAD(void* param){
 	//lancer le time out quand on recoit un ack$
 	//le fermer quand on recoit le bon ack
 }
 
 
-void *thread_ack(int sockfd) {
+void *thread_ack(void *param){
 	//recevoir buffer d_u client 
-	// recuperer le numero
+	//recuperer le numero
 	//si numero > last ack on change last ack sinon on fait rien 
+	struct thread_args *p = (struct thread_args*)param;
 	char bufferACK[9];
 	char numero_buff[6];
 	int i;
-	struct sockaddr_in cliaddr;
-	int len = sizeof(cliaddr);
+	int lendata;
+	int len = sizeof((*p).addr);
 	char *ptr;
    	long numero_int;
 	int tab[3]={0,-1,-2};
 
 	while(1){
-		recvfrom(sockfd,bufferACK,sizeof(bufferACK),0,(struct sockaddr*)&cliaddr, &len);
+		recvfrom((*p).sockfd,bufferACK,sizeof(bufferACK),0,(struct sockaddr*)&(*p).addr, &len);
 		puts(bufferACK);
 		memcpy(numero_buff,bufferACK+3,6); //recuperer les numéros de séquence
-   		numero_int = strtol(numero_buff, &ptr, 10); //conv str en int base 10
+   		numero_int = atoi(numero_buff); //conv str en int base 10
 		if (numero_int > last_ACK){
 			last_ACK = numero_int;
 		}
@@ -82,7 +84,11 @@ void *thread_ack(int sockfd) {
 			tab[0] = numero_int;
 
 			if (tab[i] ==  tab[i-1] & tab[i] == tab[i-2]){ //on recoit 3 fois le ack donc ca n'a pas été retransmit
-				ACK_perdu_flag = tab[i]+1;
+				//ACK_perdu_flag = tab[i]+1;
+				bzero((*p).buff_DATA,sizeof((*p).buff_DATA));
+				fseek((*p).fileptr,ACK_perdu_flag*(BUFF_SIZE-6),SEEK_SET); //se place au niveau du segment manquant 
+				lendata=fread((*p).buff_DATA+6, 1,BUFF_SIZE, (*p).fileptr);//ranger la data a position 6
+				sendto((*p).sockfd, (*p).buff_DATA, lendata+6, 0, (struct sockaddr*)&(*p).addr, sizeof((*p).addr));
 			}
 		} 
 			
@@ -125,8 +131,8 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 		rewind(fileptr); //remet au début du file ou fseek(fileptr,0,SEEK_STart)
 		nb_seg = (file_len / (BUFF_SIZE-6))  + 1; //-6 car 6 attribué aux numéro de séquence 
 		printf("\nnbr segment : %d",nb_seg);
-		//pthread_t thread_ack_id;
-		//pthread_create(thread_ack_id,NULL,thread_ack,datasocket); //lancer le thread pour écouter les ACK en parrallele d'envoyer les segments
+		
+	
 
 
 		 
@@ -153,27 +159,31 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 				lendata=fread(buff_DATA+6, 1,BUFF_SIZE, fileptr);//ranger la data a position 6
 
 				sendto(datasocket, buff_DATA, lendata, 0, (struct sockaddr*)&addr, sizeof(addr));
-				printf("data send par serveur\n");
-				puts(buff_DATA);
+				//printf("data send par serveur\n");
+				//puts(buff_DATA);
 				//start timeoutthread
 				last_SND ++;
 				Swindow --;
+				//struct pour arg de thread
+
+				struct thread_args param;
+				param.fileptr = fileptr;
+				param.addr = addr;
+				param.buff_DATA = buff_DATA;
+				param.sockfd = datasocket;
+				pthread_t thread_ack_id;
+				pthread_create(&thread_ack_id,NULL,thread_ack,&param); //lancer le thread pour écouter les ACK en parrallele d'envoyer les segments
+				//pthread_join(thread_ack_id, NULL);
 			}
-			/*
-			while (ACK_perdu_flag != 0){
-				bzero(buff_DATA,sizeof(buff_DATA));
-				fseek(fileptr,ACK_perdu_flag*(BUFF_SIZE-6),SEEK_SET); //se place au niveau du segment manquant 
-				lendata=fread(buff_DATA+6, 1,BUFF_SIZE, fileptr);//ranger la data a position 6
-				sendto(datasocket, buff_DATA, lendata+6, 0, (struct sockaddr*)&addr, sizeof(addr));
-			}
-			*/
+			
+			
 
 			bzero(buff_DATA,sizeof(buff_DATA));
 			//int var_ACK;
 			//pthread_mutex_lock(&ackMutex);
 			//var_ACK = last_ACK;
 			//pthread_mutex_unlock(&ackMutex);
-			last_ACK ++;
+			//last_ACK ++;
 			Swindow = last_ACK - (last_SND - max_window); // taille de data que tu peux encore envoyer dans ta fenetre de mla taille max_window
 			if (Swindow < 0){
 				Swindow = 0;
