@@ -55,19 +55,37 @@ void *thread_ack(int sockfd) {
 	//si numero > last ack on change last ack sinon on fait rien 
 	char bufferACK[9];
 	char numero_buff[6];
+	int i;
 	struct sockaddr_in cliaddr;
 	int len = sizeof(cliaddr);
 	char *ptr;
    	long numero_int;
+	int tab[3]={0,-1,-2};
+
 	while(1){
 		recvfrom(sockfd,bufferACK,sizeof(bufferACK),0,(struct sockaddr*)&cliaddr, &len);
+		puts(bufferACK);
 		memcpy(numero_buff,bufferACK+3,6); //recuperer les numéros de séquence
    		numero_int = strtol(numero_buff, &ptr, 10); //conv str en int base 10
 		if (numero_int > last_ACK){
 			last_ACK = numero_int;
 		}
+
+		for (i = 0; i < 3; i++){
+			//decaler indice
+			tab[2] = tab[1];
+			tab[1] = tab[0];
+			tab[0] = numero_int;
+
+			if (tab[i] ==  tab[i-1] & tab[i] == tab[i-2]){ //on recoit 3 fois le ack donc ca n'a pas été retransmit
+				ACK_perdu_flag = tab[i]+1;
+			}
+		} 
+			
+
 	}
 
+	//quand on recoit 3 fois le meme ack => on le renvoit 
 	//slow start ici 
 
 }
@@ -79,7 +97,7 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 	memset((char*)&addr,0,sizeof(addr));
 	int connection_flag = 1; //tant qu'on a pas recu le ackFIN 
 	int Swindow = max_window;
-
+	char bufferACK[9];
 	
 	while (connection_flag){
 		int len = sizeof(addr);
@@ -128,9 +146,11 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 				sprintf(buff_DATA, "%06d\n", compteur);
 				fseek(fileptr,last_SND*(BUFF_SIZE-6),SEEK_SET); //se deplacer dans le file (seek_set = on part du début du fichier et on avance numéro seg * taille buff-6
 				lendata=fread(buff_DATA+6, 1,BUFF_SIZE, fileptr);//ranger la data a position 6
-				printf("%d\n",lendata);
+				//printf("%d\n",lendata);
 				sendto(datasocket, buff_DATA, lendata, 0, (struct sockaddr*)&addr, sizeof(addr));
-				
+				//sleep(1);
+				//recvfrom(datasocket, bufferACK, sizeof(bufferACK)-1024, 0,(struct sockaddr*)&addr, &len);
+				//puts(bufferACK);
 				//recvfrom(datasocket, buff_DATA, sizeof(buff_DATA), 0,(struct sockaddr*)&addr, &len);
 				//start timeoutthread
 				last_SND ++;
@@ -150,7 +170,7 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 			
 
 		}
-		sleep(1);
+		//sleep(1);
 		strcpy(buff_DATA, "FIN");
   		sendto(datasocket, buff_DATA, BUFF_SIZE, 0, (struct sockaddr*)&addr, sizeof(addr));
 
