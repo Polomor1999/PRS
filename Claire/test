@@ -1,0 +1,45 @@
+void *thread_ack(void *param){
+	//recevoir buffer d_u client 
+	//recuperer le numero
+	//si numero > last ack on change last ack sinon on fait rien 
+	struct thread_args *p = (struct thread_args*)param;
+	char bufferACK[9];
+	char numero_buff[6];
+	int i;
+	int lendata;
+	int len = sizeof((*p).addr);
+	char *ptr;
+   	long numero_int;
+	int tab[3]={0,-1,-2};
+
+	while(1){
+		recvfrom((*p).sockfd,bufferACK,sizeof(bufferACK),0,(struct sockaddr*)&(*p).addr, &len);
+		puts(bufferACK);
+		memcpy(numero_buff,bufferACK+3,6); //recuperer les numéros de séquence
+   		numero_int = atoi(numero_buff); //conv str en int base 10
+		if (numero_int > last_ACK){
+			last_ACK = numero_int;
+		}
+
+		for (i = 0; i < 3; i++){
+			//decaler indice
+			tab[2] = tab[1];
+			tab[1] = tab[0];
+			tab[0] = numero_int;
+
+			if (tab[i] ==  tab[i-1] & tab[i] == tab[i-2]){ //on recoit 3 fois le ack donc ca n'a pas été retransmit
+				//ACK_perdu_flag = tab[i]+1;
+				bzero((*p).buff_DATA,sizeof((*p).buff_DATA));
+				fseek((*p).fileptr,ACK_perdu_flag*(BUFF_SIZE-6),SEEK_SET); //se place au niveau du segment manquant 
+				lendata=fread((*p).buff_DATA+6, 1,BUFF_SIZE, (*p).fileptr);//ranger la data a position 6
+				sendto((*p).sockfd, (*p).buff_DATA, lendata+6, 0, (struct sockaddr*)&(*p).addr, sizeof((*p).addr));
+			}
+		} 
+			
+
+	}
+
+	//quand on recoit 3 fois le meme ack => on le renvoit 
+	//slow start ici 
+
+}
