@@ -148,6 +148,7 @@ void *thread_ack(void *param){
 
 void transfert_data(int datasocket, struct sockaddr_in addr){
 
+
 	char buff_DATA[BUFF_SIZE];
 	memset((char*)&addr,0,sizeof(addr));
 	int connection_flag = 1; //tant qu'on a pas recu le ackFIN 
@@ -404,6 +405,7 @@ int main(int argc,char* argv[])
 
 			//if (pid == 0){
 				close(socketudp);
+				printf("cest chaud la");
 				transfert_data(datasocket,cliaddr);
 				exit(0);
 			//}
