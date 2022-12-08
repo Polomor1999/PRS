@@ -81,7 +81,7 @@ void *thread_ack(void *param){
 	while(1){
 		//printf("nbr de threads : %d\n", compteur);
 		recvfrom((*p).sockfd,bufferACK,sizeof(bufferACK),0,(struct sockaddr*)&(*p).addr, &len);
-		puts(bufferACK);
+		//puts(bufferACK);
 		memcpy(numero_buff,bufferACK+3,6); //recuperer les numéros de séquence
    		numero_int = atoi(numero_buff); //conv str en int base 10
 		if (numero_int > last_ACK){
