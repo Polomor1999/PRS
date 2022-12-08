@@ -88,37 +88,40 @@ void *thread_ack(void *param){
 			last_ACK = numero_int;
 		}
 
+		/*
 		printf("\ntableau = ");
 		printf("\t %d", tab[0]);
 		printf("\t%d", tab[1]);
 		printf("\t%d", tab[2]);
+		*/
 		compteur2 ++;
 
 		//printf("\nlastACK = %d", last_ACK);
 		//decaler indice
-		printf("\n");
+		//printf("\n");
 		tab[2] = tab[1];
 		tab[1] = tab[0];
 		tab[0] = numero_int;
 		
-		printf("\ntableau2 = ");
+		/*printf("\ntableau2 = ");
 		printf("\t %d", tab[0]);
 		printf("\t%d", tab[1]);
 		printf("\t%d", tab[2]);
 
 		printf("compteur %d",compteur2);
+		*/
 
 		if(tab[2] == tab[0]){
-			printf("bug");
+			//printf("bug");
 			ACK_perdu_flag = tab[0]+1;
-			printf("%d",ACK_perdu_flag);
+			//printf("%d",ACK_perdu_flag);
 			bzero((*p).buff_DATA,sizeof((*p).buff_DATA));
 			sprintf((*p).buff_DATA, "%06d\n", ACK_perdu_flag);
 			fseek((*p).fileptr,ACK_perdu_flag*(BUFF_SIZE-6),SEEK_SET);
 			lendata=fread((*p).buff_DATA+6, 1,BUFF_SIZE, (*p).fileptr);//ranger la data a position 6
 			int n = sendto((*p).sockfd, (*p).buff_DATA, lendata, 0, (struct sockaddr*)&(*p).addr, sizeof((*p).addr));
-			printf("match%d",(*p).buff_DATA);
-			printf("segment renvoyé n°, %d", ACK_perdu_flag);
+			//printf("match%d",(*p).buff_DATA);
+			printf("\nsegment renvoyé n°, %d", ACK_perdu_flag);
 
 			tab[2] = -3;
 			tab[1] = -2;
