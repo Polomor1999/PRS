@@ -75,12 +75,13 @@ void *thread_ack(void *param){
 	char *ptr;
    	long numero_int;
 	int tab[3]={0,-1,-2};
+	int compteur2=0;
 
-		int compteur2=0;
+
 	while(1){
 		//printf("nbr de threads : %d\n", compteur);
 		recvfrom((*p).sockfd,bufferACK,sizeof(bufferACK),0,(struct sockaddr*)&(*p).addr, &len);
-		//puts(bufferACK);
+		puts(bufferACK);
 		memcpy(numero_buff,bufferACK+3,6); //recuperer les numéros de séquence
    		numero_int = atoi(numero_buff); //conv str en int base 10
 		if (numero_int > last_ACK){
@@ -100,12 +101,19 @@ void *thread_ack(void *param){
 		tab[1] = tab[0];
 		tab[0] = numero_int;
 		
+		printf("\ntableau2 = ");
+		printf("\t %d", tab[0]);
+		printf("\t%d", tab[1]);
+		printf("\t%d", tab[2]);
+
 		printf("compteur %d",compteur2);
+
 		if(tab[2] == tab[0]){
 			printf("bug");
 			ACK_perdu_flag = tab[0]+1;
 			printf("%d",ACK_perdu_flag);
 			bzero((*p).buff_DATA,sizeof((*p).buff_DATA));
+			sprintf((*p).buff_DATA, "%06d\n", ACK_perdu_flag);
 			fseek((*p).fileptr,ACK_perdu_flag*(BUFF_SIZE-6),SEEK_SET);
 			lendata=fread((*p).buff_DATA+6, 1,BUFF_SIZE, (*p).fileptr);//ranger la data a position 6
 			int n = sendto((*p).sockfd, (*p).buff_DATA, lendata, 0, (struct sockaddr*)&(*p).addr, sizeof((*p).addr));
@@ -186,7 +194,6 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 		 
 		//chercker si on est en slow start quand 
 
-
 		int lendata;
 		int compteurwindow = 0;
 		int flagwindow = 90;
@@ -203,8 +210,8 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 			
 			
 			while (compteurwindow != window+1){ //Swindow > 0 & //last_SND < nb_seg
-				printf("je passe dedans\n");
-				//sleep(1);
+				//printf("je passe dedans\n");
+				sleep(1);
 				while (last_SND < flagwindow)
 				{
 					
@@ -231,7 +238,8 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 				//pthread_join(thread_ack_id, NULL);
 			}
 			compteurwindow ++;
-			flagwindow += 200;
+			flagwindow += 90;
+			//printf("flag_windows : %d", flagwindow); 
 			}
 
 			bzero(buff_DATA,sizeof(buff_DATA));
