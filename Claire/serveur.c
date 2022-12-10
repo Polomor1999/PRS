@@ -20,7 +20,7 @@
 #define SEGMENT_LENGTH 1030
 
 int nb_seg;
-int last_ACK = 1; //dernier ack recu 
+int last_ACK = 0; //dernier ack recu 
 int last_SND = 0; //dernier segment envoyé
 int timeout_flag = 0; //=1 si le timeout s'écoule et que ack non recu
 int max_window = 1;
@@ -28,6 +28,7 @@ int ssthresh = 350;
 int slowstart_flag = 0;
 int ACK_perdu_flag = 0;
 int window;
+int flag_fin = 0;
 //int ffrts_flag = 0;
 //int ffrts_ACK = 0;
 //int ffrts_max = 2;
@@ -80,6 +81,14 @@ void *thread_ack(void *param){
 
 	while(1){
 		//printf("nbr de threads : %d\n", compteur);
+		printf("\n%d",last_ACK);
+
+		if (last_ACK == nb_seg){
+			//flag_fin = 1;
+			pthread_exit(NULL);
+			printf("\nlast ack envoyé gfgff g");
+		}
+
 		recvfrom((*p).sockfd,bufferACK,sizeof(bufferACK),0,(struct sockaddr*)&(*p).addr, &len);
 		//puts(bufferACK);
 		memcpy(numero_buff,bufferACK+3,6); //recuperer les numéros de séquence
@@ -88,13 +97,14 @@ void *thread_ack(void *param){
 			last_ACK = numero_int;
 		}
 
+		
 		/*
 		printf("\ntableau = ");
 		printf("\t %d", tab[0]);
 		printf("\t%d", tab[1]);
 		printf("\t%d", tab[2]);
 		*/
-		compteur2 ++;
+		//compteur2 ++;
 
 		//printf("\nlastACK = %d", last_ACK);
 		//decaler indice
@@ -129,6 +139,8 @@ void *thread_ack(void *param){
 			
 					
 		}
+
+
 		/*if (compteur2 == 12){ //on recoit 3 fois le ack donc ca n'a pas été retransmit
 			printf("je bug");
 			/*ACK_perdu_flag = tab[0]+1;
@@ -213,7 +225,7 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 			
 			
 			while (compteurwindow != window+1){ //Swindow > 0 & //last_SND < nb_seg
-				//printf("je passe dedans\n");
+
 				sleep(1);
 				while (last_SND < flagwindow)
 				{
@@ -228,29 +240,33 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 				//puts(buff_DATA);
 				//start timeoutthread
 				last_SND ++;
-				/*if (last_SND == 90){
-					compteurwindow ++;
-					printf("valeur compteurwindow : %d", compteurwindow);
-				}*/
-			
-				
-				//printf("last send : %d", last_SND);
-				//Swindow --;
-				//struct pour arg de thread
 
-				//pthread_join(thread_ack_id, NULL);
+				if (last_SND == nb_seg){
+					break;
+				}
+			                             
 			}
 			compteurwindow ++;
 			flagwindow += 90;
+			//
+			//
+			//
+			//
+			//
+			//
+			//
+			//
+			//
+			//il faut mettre un ack90 pour ack a chaque fois pour que notre window soit utile et faire une sliding windows
+
 			//printf("flag_windows : %d", flagwindow); 
 			}
-
 			bzero(buff_DATA,sizeof(buff_DATA));
 			//int var_ACK;
 			//pthread_mutex_lock(&ackMutex);
 			//var_ACK = last_ACK;
 			//pthread_mutex_unlock(&ackMutex);
-			last_ACK ++;
+			//last_ACK ++;
 			//Swindow = last_ACK - (last_SND - max_window); // taille de data que tu peux encore envoyer dans ta fenetre de mla taille max_window
 			/*
 			if (Swindow < 0){
@@ -260,7 +276,8 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 			
 
 		}
-		//sleep(1);
+		pthread_join(thread_ack_id,NULL);
+		//if ()
 		strcpy(buff_DATA, "FIN");
   		sendto(datasocket, buff_DATA, BUFF_SIZE, 0, (struct sockaddr*)&addr, sizeof(addr));
 		uint64_t endtime = time_now();
