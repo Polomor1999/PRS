@@ -1,6 +1,6 @@
 all: serveur client oui
 serveur: serveur.c 
-	gcc -fno-stack-protector serveur.c -o serveur 
+	gcc -fno-stack-protector serveur.c -o serveur -lpthread
 client: client.c
 	gcc client.c -o client
 oui: oui.c
