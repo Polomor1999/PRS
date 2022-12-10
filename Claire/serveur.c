@@ -117,7 +117,6 @@ void *thread_ack(void *param){
 		printf("\t %d", tab[0]);
 		printf("\t%d", tab[1]);
 		printf("\t%d", tab[2]);
-
 		printf("compteur %d",compteur2);
 		*/
 
@@ -393,92 +392,3 @@ int main(int argc,char* argv[])
 
 
 }
-
-//to do 
-//sliding windows pour envoyer que a max 94 pr la fleur 
-//RTT
-//fast retransmit 
-
-
-/*
-printf("\nMessage du Client sur datasocket: ");
-			while(1){
-				//ouverture nouvelle socket pr comm exclusivement avec le client 
-				//bzero(buff_DATA, sizeof(buff_DATA));
-				//printf("\nMessage from Client on newsocket: ");
-				//b = recvfrom(datasocket, buff_DATA, sizeof(buff_DATA), 0,(struct sockaddr*)&cliaddr, &len);
-				//puts(buff_DATA);
-				//sendto(datasocket, (const char*)message2, strlen(message2), 0,(struct sockaddr*)&cliaddr, sizeof(cliaddr));
-
-
-				// Sending the file data to the server
-				int n,flag,lendata;
-				//numéro de sequence 
-				long compteur = 0;
-				char buff_CON[BUFF_SIZE];
-				bzero(buff_CON, BUFF_SIZE);
-				char numero[SEGMENT_LENGTH];
-				bzero(numero, SEGMENT_LENGTH);
-				struct timespec start, finish, delta;
-				flag = 1;
-				// Sending the data
-
-				//  FILE* f2 = fopen("kjh.pdf", "wb");
-
-				while (1) //je lit tout d'un coup
-				{
-					lendata=fread(buff_CON, 1,BUFF_SIZE, fp);//taille que j'ai reussi a lire dans mon file
-					flag = !(lendata<1024); //flag=0 si on atteint la fin du file
-
-					// convertir int to char en respectant le nb ce charcatere 
-					// mettre au début du buff_CON
-					// remplir le buff_CON avec les datas
-					//printf("Data: %s\n",buff_CON);
-					compteur++;
-					printf("%d\n",lendata);
-
-					//long to char 
-					sprintf(numero, "%06d\n", compteur);
-					printf("numero : %s\n",numero);
-					//add compteur to buff_CON
-					memcpy(numero+6,buff_CON,lendata);
-
-					//printf("[SENDING] Data: %s\n",buff_CON);
-					n = sendto(datasocket, numero, lendata+6, 0, (struct sockaddr*)&cliaddr, sizeof(cliaddr));
-
-    				//clock_gettime(CLOCK_REALTIME, &start);
-					if (n == -1)
-					{
-					perror("[ERROR] sending data to the server.");
-					exit(1);
-					}
-					recvfrom(datasocket, buff_DATA, sizeof(buff_DATA), 0,(struct sockaddr*)&cliaddr, &len);
-					//clock_gettime(CLOCK_REALTIME, &finish);
-					puts(buff_DATA);
-
-					bzero(buff_CON, BUFF_SIZE);
-					bzero(numero, SEGMENT_LENGTH);
-				}
-				// fclose(f2);
-
-				// Sending the 'FIN'
-				//sleep(1);
-				strcpy(buff_CON, "FIN");
-				sendto(datasocket, buff_CON, BUFF_SIZE, 0, (struct sockaddr*)&cliaddr, sizeof(cliaddr));
-
-				fclose(fp);
-				// Sending the file data to the server
-				//send_file_data(fp, datasocket, cliaddr);
-				printf("[SUCCESS] Data transfer complete.\n");
-				
-				close(datasocket);
-    			//clock_gettime(CLOCK_REALTIME, &start);
-    			//sleep(1);
-    			//clock_gettime(CLOCK_REALTIME, &finish);
-    			//sub_timespec(start, finish, &delta);
-   				//printf("%d.%.9ld\n", (int)delta.tv_sec, delta.tv_nsec);
-
-
-
-			} 
-*/
