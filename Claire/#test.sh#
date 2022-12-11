@@ -1,0 +1,11 @@
+echo#!/bin/bash
+
+i=0
+while [ $i -le 1000 ]
+do
+    #./serveur 8083 2 100&
+    #SERVEUR_PID=$!
+    ./client1 172.21.0.1 8083 test.pdf 0
+    #kill $SERVEUR_PID
+    i=$((i+1))
+done
