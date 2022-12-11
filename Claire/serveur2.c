@@ -123,7 +123,7 @@ void *thread_ack(void *param){
 
 		if(tab[2] == tab[0]){
 			//printf("bug");
-			for (int i = 1; i < 10; i++ || i < nb_seg)
+			for (int i = 1; i < 10; i++ || i > nb_seg)
 			{
 			ACK_perdu_flag = tab[0]+i;
 			//printf("%d",ACK_perdu_flag);
