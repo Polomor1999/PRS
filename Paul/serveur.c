@@ -17,7 +17,9 @@
 
 
 
-#define BUFF_SIZE 1030
+#define BUFF_SIZE 1500
+
+pthread_mutex_t mutex;
 
 
 int nb_seg;
@@ -28,26 +30,20 @@ int max_window = 1;
 int ssthresh = 350;
 int slowstart_flag = 0;
 int ACK_perdu_flag = 0;
-int window;
+int nbfoiswindow;
 int flag_fin = 0;
-int stop_process=0;
-//int ffrts_flag = 0;
-//int ffrts_ACK = 0;
-//int ffrts_max = 2;
+int reversecompteur = 50;
 
-//double timeout_RTT = 10;
-//double estimated_RTT = 0;
-//double dev_RTT = 0;
-//double RTT = 0;
 
 struct timeval timeout_RTT_time;
-pthread_mutex_t ackMutex = PTHREAD_MUTEX_INITIALIZER;//pb baguettes chinoises 
+
+
 
 
 struct thread_args //structure pour les arguments du thread
 {
 	int sockfd;
-	char* buff_DATA;
+	//char* buff_DATA;
 	FILE *fileptr;
 	struct sockaddr_in addr;
 };
@@ -59,117 +55,88 @@ uint64_t time_now()
 	return current.tv_sec * 1000000 + current.tv_usec;
 }
 
-void *timeout_THREAD(void* param){
-	//lancer le time out quand on recoit un ack$
-	//le fermer quand on recoit le bon ack
-}
-
 
 void *thread_ack(void *param){
 	//recevoir buffer d_u client 
 	//recuperer le numero
 	//si numero > last ack on change last ack sinon on fait rien 
 	struct thread_args *p = (struct thread_args*)param;
-	char bufferACK[9];
-	char numero_buff[6];
+	char bufferACK[10];
+	char buff_DATAT[BUFF_SIZE];
+	char numero_buff[7];
 	int i;
 	int lendata;
 	int len = sizeof((*p).addr);
 	char *ptr;
    	long numero_int;
-	int tab[3]={0,-1,-2};
+	//int tab[3]={0,-1,-2};
+	int tab[2]={0,-1};
 	int compteur2=0;
 
+	fd_set desc;
+	FD_ZERO(&desc);
+	struct timeval timeout;
 
 	while(last_ACK<nb_seg){
-    for (int i = 0; i < 100; i++)
-    {
-      stop_process = 1;
-    
-    
 		//printf("nbr de threads : %d\n", compteur);
-		printf("\n%d",last_ACK);
+		bzero(bufferACK,sizeof(bufferACK));
+		bzero(numero_buff,sizeof(numero_buff));
+		//select
+		FD_SET((*p).sockfd,&desc);
+		timeout.tv_sec = 0;
+		timeout.tv_usec = 500000;
+		int res = select((*p).sockfd+1,&desc,NULL,NULL,&timeout);
+		if	(res>0){
 
-		if (last_ACK == nb_seg){
-			//flag_fin = 1;
-			pthread_exit(NULL);
-			printf("\nlast ack envoyé gfgff g");
-		}
-
+		
 		recvfrom((*p).sockfd,bufferACK,sizeof(bufferACK),0,(struct sockaddr*)&(*p).addr, &len);
-		//puts(bufferACK);
 		memcpy(numero_buff,bufferACK+3,6); //recuperer les numéros de séquence
+
    		numero_int = atoi(numero_buff); //conv str en int base 10
 		if (numero_int > last_ACK){
+			//printf("UPDATE last_ACK %d    on %d seg\n",numero_int,nb_seg);
 			last_ACK = numero_int;
 		}
 
-		
-		/*
-		printf("\ntableau = ");
-		printf("\t %d", tab[0]);
-		printf("\t%d", tab[1]);
-		printf("\t%d", tab[2]);
-		*/
-		//compteur2 ++;
+		//sem_post si last ack =50
 
-		//printf("\nlastACK = %d", last_ACK);
-		//decaler indice
-		//printf("\n");
-		tab[2] = tab[1];
-		tab[1] = tab[0];
-		tab[0] = numero_int;
-		
-		/*printf("\ntableau2 = ");
-		printf("\t %d", tab[0]);
-		printf("\t%d", tab[1]);
-		printf("\t%d", tab[2]);
-		printf("compteur %d",compteur2);
-		*/
+		if (numero_int == last_ACK){
+			//tab[2] = tab[1];
+			tab[1] = tab[0];
+			tab[0] = numero_int;
+		}
 
-		if(tab[2] == tab[0]){
+		
+		
+		if(tab[1] == tab[0]){
+
 			//printf("bug");
 			ACK_perdu_flag = tab[0]+1;
 			//printf("%d",ACK_perdu_flag);
-			bzero((*p).buff_DATA,sizeof((*p).buff_DATA));
-			sprintf((*p).buff_DATA, "%06d\n", ACK_perdu_flag);
-			fseek((*p).fileptr,ACK_perdu_flag*(BUFF_SIZE-6),SEEK_SET);
-			lendata=fread((*p).buff_DATA+6, 1,BUFF_SIZE, (*p).fileptr);//ranger la data a position 6
-			int n = sendto((*p).sockfd, (*p).buff_DATA, lendata, 0, (struct sockaddr*)&(*p).addr, sizeof((*p).addr));
-			//printf("match%d",(*p).buff_DATA);
-			printf("\nsegment renvoyé n°, %d", ACK_perdu_flag);
+			bzero(buff_DATAT,sizeof(buff_DATAT));
+			sprintf(buff_DATAT, "%06d\n", ACK_perdu_flag);
 
-			tab[2] = -3;
+			pthread_mutex_lock(&mutex);
+			fseek((*p).fileptr,(ACK_perdu_flag-1)*(BUFF_SIZE-6),SEEK_SET);
+			lendata=fread(buff_DATAT+6, 1,BUFF_SIZE-6, (*p).fileptr);//ranger la data a position 6
+			pthread_mutex_unlock(&mutex);
+
+
+			int n = sendto((*p).sockfd, buff_DATAT, lendata+6, 0, (struct sockaddr*)&(*p).addr, sizeof((*p).addr));
+			
+			printf("\nsegment renvoyé n°, %d\n", ACK_perdu_flag);
+			
+
+			//tab[2] = -3;
 			tab[1] = -2;
-			tab[0] = -1;
-			
-					
+			tab[0] = -1;		
+		}	
+		}else{
+			//gerer timeout 
+			//retransmission
 		}
-
-
-		/*if (compteur2 == 12){ //on recoit 3 fois le ack donc ca n'a pas été retransmit
-			printf("je bug");
-			/*ACK_perdu_flag = tab[0]+1;
-			bzero((*p).buff_DATA,sizeof((*p).buff_DATA));
-			fseek((*p).fileptr,ACK_perdu_flag*(BUFF_SIZE-6),SEEK_SET); //se place au niveau du segment manquant 
-			lendata=fread((*p).buff_DATA+6, 1,BUFF_SIZE, (*p).fileptr);//ranger la data a position 6
-			sendto((*p).sockfd, (*p).buff_DATA, lendata+6, 0, (struct sockaddr*)&(*p).addr, sizeof((*p).addr));
-			tab[2] = -1;
-			tab[1] = -1;
-			tab[0] = -1;
-			printf("segment renvoyé n°, %s", tab[0]);
-		}*/
-		
-			
-
 	}
-  stop_process=0;
-
-	//quand on recoit 3 fois le meme ack => on le renvoit 
-	//slow start ici 
 }
-}
-
 
 void transfert_data(int datasocket, struct sockaddr_in addr){
 
@@ -177,7 +144,9 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 	memset((char*)&addr,0,sizeof(addr));
 	int connection_flag = 1; //tant qu'on a pas recu le ackFIN 
 	int Swindow = max_window;
-	uint64_t startTime = time_now(); 
+	uint64_t startTime = time_now();
+
+	pthread_mutex_init(&mutex, NULL); 
 	
 	while (connection_flag){
 		int len = sizeof(addr);
@@ -201,102 +170,65 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 		rewind(fileptr); //remet au début du file ou fseek(fileptr,0,SEEK_STart)
 		nb_seg = (file_len / (BUFF_SIZE-6))  + 1; //-6 car 6 attribué aux numéro de séquence 
 		printf("nbr segment :\n %d",nb_seg);
-		window = nb_seg/50;
+		nbfoiswindow = nb_seg/50;
 	
-		struct thread_args param;
-			param.fileptr = fileptr;
-			param.addr = addr;
-			param.buff_DATA = buff_DATA;
-			param.sockfd = datasocket;
-				
-			pthread_t thread_ack_id;
-			pthread_create(&thread_ack_id,NULL,thread_ack,&param); //lancer le thread pour écouter les ACK en parrallele d'envoyer les segments
-
-
-		 
-		//chercker si on est en slow start quand 
+		struct thread_args *param= malloc(sizeof(struct thread_args));
+		param->fileptr = fileptr;
+		param->addr = addr;
+		//param.buff_DATA = buff_DATA;
+		param->sockfd = datasocket;
+			
+		pthread_t thread_ack_id;
+		pthread_create(&thread_ack_id,NULL,thread_ack,(void*)param); //lancer le thread pour écouter les ACK en parrallele d'envoyer les segments
 
 		int lendata;
 		int compteurwindow = 0;
-		int flagwindow = 50;
+		int window = 50;
 		long compteur = 0;
-		while(last_ACK < nb_seg){ //tant qu'on est pas à la fin 
-			//gestion du time out 
-			if (timeout_flag){
-				//to do 
-				//si timesout atteint on remet max_window = 1
-				//seuil = maxwindows/2 (a changer si possible)
-				
-				timeout_flag = 0;
-				}
-			
-			
-			while (compteurwindow != window+1){ 
-         // while (stop_process)
-         // {
-          //  printf("j'attend");
-         // }
-          
-				
-				while (last_SND < flagwindow)
+
+		while(last_ACK < nb_seg){
+			//tant qu'on est pas à la fin 
+			//printf("last ack = %d",last_ACK);
+			while (compteurwindow != nbfoiswindow+1){ //Swindow > 0 & //last_SND < nb_seg
+
+				nanosleep((const struct timespec[]){{0, 500000000L}}, NULL);
+				//if(last_SND==window){
+					//sem_wait()
+					//window += 50; //
+				//}
+				while (last_SND < window && last_SND < nb_seg)
 				{
 					
 				compteur++;
 				bzero(buff_DATA,sizeof(buff_DATA));
 				sprintf(buff_DATA, "%06d\n", compteur);
+				
+				pthread_mutex_lock(&mutex);
 				fseek(fileptr,last_SND*(BUFF_SIZE-6),SEEK_SET); //se deplacer dans le file (seek_set = on part du début du fichier et on avance numéro seg * taille buff-6
-				lendata=fread(buff_DATA+6, 1,BUFF_SIZE, fileptr);//ranger la data a position 6
-				printf("\n%d", lendata);
-				//if (compteur == nb_seg){
-					//sendto(datasocket, buff_DATA, lendata+6, 0, (struct sockaddr*)&addr, sizeof(addr));
-				//}else{
-				sendto(datasocket, buff_DATA, lendata, 0, (struct sockaddr*)&addr, sizeof(addr));
-				//}
-				
-				
-				//printf("data send par serveur\n");
-				//puts(buff_DATA);
-				//start timeoutthread
-				last_SND ++;
+				lendata=fread(buff_DATA+6, 1,BUFF_SIZE-6, fileptr);//ranger la data a position 6
+				pthread_mutex_unlock(&mutex);
 
-				if (last_SND == nb_seg){
-					break;
+				int n = sendto(datasocket, buff_DATA, lendata+6, 0, (struct sockaddr*)&addr, sizeof(addr));
+				//printf("\nlendata %d", lendata);
+				if (n == -1){
+					perror("[ERROR] sending data to the client.");
 				}
-			                             
-			}
-      sleep(1);
-			compteurwindow ++;
-			flagwindow += 50;
-			//
-			//
-			//
-			//
-			//
-			//
-			//
-			//
-			//
-			//il faut mettre un ack90 pour ack a chaque fois pour que notre window soit utile et faire une sliding windows
+				bzero(buff_DATA,sizeof(buff_DATA));
 
-			//printf("flag_windows : %d", flagwindow); 
-			}
-			bzero(buff_DATA,sizeof(buff_DATA));
-			//int var_ACK;
-			//pthread_mutex_lock(&ackMutex);
-			//var_ACK = last_ACK;
-			//pthread_mutex_unlock(&ackMutex);
-			//last_ACK ++;
-			//Swindow = last_ACK - (last_SND - max_window); // taille de data que tu peux encore envoyer dans ta fenetre de mla taille max_window
-			/*
-			if (Swindow < 0){
-				Swindow = 0;
-			}
-			*/ 	
-			
+				last_SND ++;
+				if(last_SND==nb_seg){
 
+				}
+   
+				}
+				compteurwindow ++;
+				window += 50;
+				bzero(buff_DATA,sizeof(buff_DATA));
+
+			}
 		}
+		
 		pthread_join(thread_ack_id,NULL);
-		//if ()
 		strcpy(buff_DATA, "FIN");
   		sendto(datasocket, buff_DATA, BUFF_SIZE, 0, (struct sockaddr*)&addr, sizeof(addr));
 		uint64_t endtime = time_now();
@@ -306,6 +238,7 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 		printf("taille du fichier %d \n",file_len);
 		printf("débit: %f MO/s \n",debit);
 		fclose(fileptr);
+		pthread_mutex_destroy(&mutex);
 		connection_flag=0;
 	}			
 }
