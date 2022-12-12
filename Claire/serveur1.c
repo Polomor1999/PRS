@@ -33,9 +33,9 @@ int slowstart_flag = 0;
 int ACK_perdu_flag = 0;
 int nbfoiswindow;
 int flag_fin = 0;
-int reversecompteur = 50;
 
-int window = 50;
+
+int window = 90;
 //int pshared = 0;
 
 //int sem_init(sem_t *semaphore, int pshared, unsigned int value);
@@ -70,7 +70,7 @@ void *thread_ack(void *param){
 	char buff_DATAT[BUFF_SIZE];
 	char numero_buff[7];
 	int i;
-	int windowthread =  50;
+	int windowthread =  90;
 	int lendata;
 	int len = sizeof((*p).addr);
 	char *ptr;
@@ -102,12 +102,12 @@ void *thread_ack(void *param){
 				//printf("UPDATE last_ACK %d    on %d seg\n",numero_int,nb_seg);
 				last_ACK = numero_int;
 			}
-			printf("\nack recu == %d",numero_int);
+			//printf("\nack recu == %d",numero_int);
 
 			if(last_ACK == windowthread){
 				sem_post(semaphore);
-				printf("\non libere la sema pour l ACK n° = %d ", last_ACK);
-				windowthread += 50;
+				//printf("\non libere la sema pour l ACK n° = %d ", last_ACK);
+				windowthread += 90;
 			}
 			//sem_post si last ack =50
 			if (numero_int == last_ACK){
@@ -131,7 +131,7 @@ void *thread_ack(void *param){
 
 				int n = sendto((*p).sockfd, buff_DATAT, lendata+6, 0, (struct sockaddr*)&(*p).addr, sizeof((*p).addr));
 				
-				printf("\nsegment renvoyé n°, %d\n", ACK_perdu_flag);
+				//printf("\nsegment renvoyé n°, %d\n", ACK_perdu_flag);
 				
 
 				//tab[2] = -3;
@@ -151,7 +151,7 @@ void *thread_ack(void *param){
 
 			int n = sendto((*p).sockfd, buff_DATAT, lendata+6, 0, (struct sockaddr*)&(*p).addr, sizeof((*p).addr));
 			
-			printf("\nsegment renvoyé car timeout atteint n°, %d\n", last_ACK);
+			//printf("\nsegment renvoyé car timeout atteint n°, %d\n", last_ACK);
 
 		}
 	}
@@ -199,7 +199,7 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 		rewind(fileptr); //remet au début du file ou fseek(fileptr,0,SEEK_STart)
 		nb_seg = (file_len / (BUFF_SIZE-6))  + 1; //-6 car 6 attribué aux numéro de séquence 
 		printf("nbr segment :\n %d",nb_seg);
-		nbfoiswindow = nb_seg/50;
+		nbfoiswindow = nb_seg/90;
 	
 		struct thread_args *param= malloc(sizeof(struct thread_args));
 		param->fileptr = fileptr;
@@ -223,8 +223,8 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 				//nanosleep((const struct timespec[]){{0, 500000000L}}, NULL);
 				if(last_SND==window){
 					
-					printf("\nSema Bloquée au numéro = %d",last_SND);
-					window += 50;
+					//printf("\nSema Bloquée au numéro = %d",last_SND);
+					window += 90;
 					compteur2++;
 					sem_wait(semaphore);
 					//printf("\nclast_snd =%d",last_SND);
@@ -232,7 +232,7 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 				}
 				while (last_SND < window && last_SND < nb_seg)
 				{
-				printf("\nlast_send =%d",last_SND);
+				//printf("\nlast_send =%d",last_SND);
 				compteur++;
 				bzero(buff_DATA,sizeof(buff_DATA));
 				sprintf(buff_DATA, "%06d\n", compteur);
