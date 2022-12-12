@@ -1,0 +1,5 @@
+TO DO LIST:
+
+	- mettre un timeout pour le cas où le client renvoit pas de ack alors qu'il a recut le paquet
+	- enlever le sleep en mettant un truc qui permet au main d'etre bloqué pdt que le thread tourne
+	- mettre un fork et chnager les ports a chaque fois 
