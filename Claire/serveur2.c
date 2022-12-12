@@ -35,7 +35,7 @@ int nbfoiswindow;
 int flag_fin = 0;
 
 
-int window = 10;
+int window = 20;
 //int pshared = 0;
 
 //int sem_init(sem_t *semaphore, int pshared, unsigned int value);
@@ -70,7 +70,7 @@ void *thread_ack(void *param){
 	char buff_DATAT[BUFF_SIZE];
 	char numero_buff[7];
 	int i;
-	int windowthread =  10;
+	int windowthread =  20;
 	int lendata;
 	int len = sizeof((*p).addr);
 	char *ptr;
@@ -107,7 +107,7 @@ void *thread_ack(void *param){
 			if(last_ACK == windowthread){
 				sem_post(semaphore);
 				printf("\non libere la sema pour l ACK n° = %d ", last_ACK);
-				windowthread += 10;
+				windowthread += 20;
 			}
 			//sem_post si last ack =50
 			if (numero_int == last_ACK){
@@ -199,7 +199,7 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 		rewind(fileptr); //remet au début du file ou fseek(fileptr,0,SEEK_STart)
 		nb_seg = (file_len / (BUFF_SIZE-6))  + 1; //-6 car 6 attribué aux numéro de séquence 
 		printf("nbr segment :\n %d",nb_seg);
-		nbfoiswindow = nb_seg/10;
+		nbfoiswindow = nb_seg/20;
 	
 		struct thread_args *param= malloc(sizeof(struct thread_args));
 		param->fileptr = fileptr;
@@ -224,7 +224,7 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 				if(last_SND==window){
 					
 					printf("\nSema Bloquée au numéro = %d",last_SND);
-					window += 10;
+					window += 20;
 					compteur2++;
 					sem_wait(semaphore);
 					//printf("\nclast_snd =%d",last_SND);

@@ -167,7 +167,7 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 	int Swindow = max_window;
 	uint64_t startTime = time_now();
 	//int sem_init(sem_t *sem, int pshared, unsigned int value);
-	semaphore = sem_open("/semaphore", O_CREAT); //semaphore = un pointeur vers la semaphore ouverte 
+	semaphore = sem_open("/semaphore", O_CREAT, 0600, 1); //semaphore = un pointeur vers la semaphore ouverte 
 	//n = sem_init(&semaphore, 0, 1);
 	
 	if (semaphore==SEM_FAILED){ //n==-1
@@ -273,6 +273,8 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 		printf("taille du fichier %d \n",file_len);
 		printf("débit: %f MO/s \n",debit);
 		sem_destroy(semaphore);
+		//sem_close(semaphore);
+		//sem_unlink(semaphore);
 		fclose(fileptr);
 		pthread_mutex_destroy(&mutex);
 		//sem_unlink("sema");
