@@ -14,12 +14,13 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include <pthread.h>
+#include <semaphore.h>
 
-
-
+#define SEM_NAME "/semaphore"
 #define BUFF_SIZE 1500
 
 pthread_mutex_t mutex;
+sem_t *semaphore;
 
 
 int nb_seg;
@@ -34,6 +35,10 @@ int nbfoiswindow;
 int flag_fin = 0;
 int reversecompteur = 50;
 
+int window = 50;
+//int pshared = 0;
+
+//int sem_init(sem_t *semaphore, int pshared, unsigned int value);
 
 struct timeval timeout_RTT_time;
 
@@ -65,6 +70,7 @@ void *thread_ack(void *param){
 	char buff_DATAT[BUFF_SIZE];
 	char numero_buff[7];
 	int i;
+	int windowthread =  50;
 	int lendata;
 	int len = sizeof((*p).addr);
 	char *ptr;
@@ -73,61 +79,101 @@ void *thread_ack(void *param){
 	int tab[2]={0,-1};
 	int compteur2=0;
 
+	fd_set desc;
+	FD_ZERO(&desc);
+	struct timeval timeout;
 
 	while(last_ACK<nb_seg){
 		//printf("nbr de threads : %d\n", compteur);
 		bzero(bufferACK,sizeof(bufferACK));
 		bzero(numero_buff,sizeof(numero_buff));
-		recvfrom((*p).sockfd,bufferACK,sizeof(bufferACK),0,(struct sockaddr*)&(*p).addr, &len);
-		memcpy(numero_buff,bufferACK+3,6); //recuperer les numéros de séquence
+		//select
+		FD_SET((*p).sockfd,&desc);
+		timeout.tv_sec = 0;
+		timeout.tv_usec = 5000; //a faire varier pr checker 
+		int res = select((*p).sockfd+1,&desc,NULL,NULL,&timeout);
+		if	(res>0){
+			
+			recvfrom((*p).sockfd,bufferACK,sizeof(bufferACK),0,(struct sockaddr*)&(*p).addr, &len);
+			memcpy(numero_buff,bufferACK+3,6); //recuperer les numéros de séquence
+			
+			numero_int = atoi(numero_buff); //conv str en int base 10
+			if (numero_int > last_ACK){
+				//printf("UPDATE last_ACK %d    on %d seg\n",numero_int,nb_seg);
+				last_ACK = numero_int;
+			}
+			printf("\nack recu == %d",numero_int);
 
-   		numero_int = atoi(numero_buff); //conv str en int base 10
-		if (numero_int > last_ACK){
-			//printf("UPDATE last_ACK %d    on %d seg\n",numero_int,nb_seg);
-			last_ACK = numero_int;
-		}
+			if(last_ACK == windowthread){
+				sem_post(semaphore);
+				printf("\non libere la sema pour l ACK n° = %d ", last_ACK);
+				windowthread += 50;
+			}
+			//sem_post si last ack =50
+			if (numero_int == last_ACK){
+				//tab[2] = tab[1];
+				tab[1] = tab[0];
+				tab[0] = numero_int;
+			}	
+			if(tab[1] == tab[0]){
 
-		if (numero_int == last_ACK){
-			//tab[2] = tab[1];
-			tab[1] = tab[0];
-			tab[0] = numero_int;
-		}
+				//printf("bug");
+				ACK_perdu_flag = tab[0]+1;
+				//printf("%d",ACK_perdu_flag);
+				bzero(buff_DATAT,sizeof(buff_DATAT));
+				sprintf(buff_DATAT, "%06d\n", ACK_perdu_flag);
 
-		
-		
-		if(tab[1] == tab[0]){
+				pthread_mutex_lock(&mutex);
+				fseek((*p).fileptr,(ACK_perdu_flag-1)*(BUFF_SIZE-6),SEEK_SET);
+				lendata=fread(buff_DATAT+6, 1,BUFF_SIZE-6, (*p).fileptr);//ranger la data a position 6
+				pthread_mutex_unlock(&mutex);
 
-			//printf("bug");
-			ACK_perdu_flag = tab[0]+1;
-			//printf("%d",ACK_perdu_flag);
+
+				int n = sendto((*p).sockfd, buff_DATAT, lendata+6, 0, (struct sockaddr*)&(*p).addr, sizeof((*p).addr));
+				
+				printf("\nsegment renvoyé n°, %d\n", ACK_perdu_flag);
+				
+
+				//tab[2] = -3;
+				tab[1] = -2;
+				tab[0] = -1;		
+		}	
+		}else{
+			//gerer timeout donc retransmission du last ack si on a atteint la fin du timeout 
 			bzero(buff_DATAT,sizeof(buff_DATAT));
-			sprintf(buff_DATAT, "%06d\n", ACK_perdu_flag);
+			sprintf(buff_DATAT, "%06d\n", last_ACK);
 
 			pthread_mutex_lock(&mutex);
-			fseek((*p).fileptr,(ACK_perdu_flag-1)*(BUFF_SIZE-6),SEEK_SET);
+			fseek((*p).fileptr,(last_ACK-1)*(BUFF_SIZE-6),SEEK_SET);
 			lendata=fread(buff_DATAT+6, 1,BUFF_SIZE-6, (*p).fileptr);//ranger la data a position 6
 			pthread_mutex_unlock(&mutex);
 
 
 			int n = sendto((*p).sockfd, buff_DATAT, lendata+6, 0, (struct sockaddr*)&(*p).addr, sizeof((*p).addr));
 			
-			printf("\nsegment renvoyé n°, %d\n", ACK_perdu_flag);
-			
+			printf("\nsegment renvoyé car timeout atteint n°, %d\n", last_ACK);
 
-			//tab[2] = -3;
-			tab[1] = -2;
-			tab[0] = -1;		
-		}	
+		}
 	}
 }
 
 void transfert_data(int datasocket, struct sockaddr_in addr){
 
 	char buff_DATA[BUFF_SIZE];
+	int compteur2=0;
+	int n;
 	memset((char*)&addr,0,sizeof(addr));
 	int connection_flag = 1; //tant qu'on a pas recu le ackFIN 
 	int Swindow = max_window;
 	uint64_t startTime = time_now();
+	//int sem_init(sem_t *sem, int pshared, unsigned int value);
+	semaphore = sem_open("/semaphore", O_CREAT); //semaphore = un pointeur vers la semaphore ouverte 
+	//n = sem_init(&semaphore, 0, 1);
+	
+	if (semaphore==SEM_FAILED){ //n==-1
+		printf("\nERROR CREATION SEMAPHORE");
+		exit(1);
+	}
 
 	pthread_mutex_init(&mutex, NULL); 
 	
@@ -166,7 +212,7 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 
 		int lendata;
 		int compteurwindow = 0;
-		int window = 50;
+		//int window = 50;
 		long compteur = 0;
 
 		while(last_ACK < nb_seg){
@@ -174,10 +220,19 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 			//printf("last ack = %d",last_ACK);
 			while (compteurwindow != nbfoiswindow+1){ //Swindow > 0 & //last_SND < nb_seg
 
-				sleep(1);
+				//nanosleep((const struct timespec[]){{0, 500000000L}}, NULL);
+				if(last_SND==window){
+					
+					printf("\nSema Bloquée au numéro = %d",last_SND);
+					window += 50;
+					compteur2++;
+					sem_wait(semaphore);
+					//printf("\nclast_snd =%d",last_SND);
+					
+				}
 				while (last_SND < window && last_SND < nb_seg)
 				{
-					
+				printf("\nlast_send =%d",last_SND);
 				compteur++;
 				bzero(buff_DATA,sizeof(buff_DATA));
 				sprintf(buff_DATA, "%06d\n", compteur);
@@ -195,10 +250,14 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 				bzero(buff_DATA,sizeof(buff_DATA));
 
 				last_SND ++;
+				if(last_SND==nb_seg){
+
+				}
    
 				}
 				compteurwindow ++;
-				window += 50;
+				//sem_post(&semaphore); //sem débloquée 
+				//window += 50;
 				bzero(buff_DATA,sizeof(buff_DATA));
 
 			}
@@ -213,9 +272,12 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 		double debit=((file_len-6.0)*0.000001)/timeTaken;
 		printf("taille du fichier %d \n",file_len);
 		printf("débit: %f MO/s \n",debit);
+		sem_destroy(semaphore);
 		fclose(fileptr);
 		pthread_mutex_destroy(&mutex);
+		//sem_unlink("sema");
 		connection_flag=0;
+
 	}			
 }
 
