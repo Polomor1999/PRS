@@ -19,39 +19,33 @@
 #define SEM_NAME "/semaphore"
 #define BUFF_SIZE 1500
 
+/*-------------------------------------------------------------- */
+/*------------------DECLARATION DE VARIABLE -------------------- */
+/*-------------------------------------------------------------- */
+
 pthread_mutex_t mutex;
 sem_t *semaphore;
 
 
 int nb_seg;
-int last_ACK = 0; //dernier ack recu 
-int last_SND = 0; //dernier segment envoyé
-int timeout_flag = 0; //=1 si le timeout s'écoule et que ack non recu
-int max_window = 1;
-int ssthresh = 350;
-int slowstart_flag = 0;
+int Last_ACK_Updated = 0; 
+int last_SND = 0; 
 int ACK_perdu_flag = 0;
 int nbfoiswindow;
-int flag_fin = 0;
-
-
-int window = 90;
-//int pshared = 0;
-
-//int sem_init(sem_t *semaphore, int pshared, unsigned int value);
+int diff; 
+int window = 50;
 
 struct timeval timeout_RTT_time;
-
-
-
-
-struct thread_args //structure pour les arguments du thread
+struct thread_args
 {
 	int sockfd;
-	//char* buff_DATA;
 	FILE *fileptr;
 	struct sockaddr_in addr;
 };
+
+/*-------------------------------------------------------------- */
+/*-------------------------THREADS------------------------------ */
+/*-------------------------------------------------------------- */
 
 uint64_t time_now()
 {
@@ -62,64 +56,62 @@ uint64_t time_now()
 
 
 void *thread_ack(void *param){
-	//recevoir buffer d_u client 
-	//recuperer le numero
-	//si numero > last ack on change last ack sinon on fait rien 
+
+	//écoute et recoit les ack du client + renvoie les paquets perdus au client 
+
 	struct thread_args *p = (struct thread_args*)param;
 	char bufferACK[10];
 	char buff_DATAT[BUFF_SIZE];
 	char numero_buff[7];
-	int i;
-	int windowthread =  90;
+	int windowthread =  50;
 	int lendata;
 	int len = sizeof((*p).addr);
 	char *ptr;
-   	long numero_int;
-	//int tab[3]={0,-1,-2};
+   	long last_ACK;
 	int tab[2]={0,-1};
-	int compteur2=0;
 
 	fd_set desc;
 	FD_ZERO(&desc);
 	struct timeval timeout;
 
-	while(last_ACK<nb_seg){
-		//printf("nbr de threads : %d\n", compteur);
+	while(Last_ACK_Updated<nb_seg){
+		
+		int res = select((*p).sockfd+1,&desc,NULL,NULL,&timeout);
 		bzero(bufferACK,sizeof(bufferACK));
 		bzero(numero_buff,sizeof(numero_buff));
-		//select
 		FD_SET((*p).sockfd,&desc);
 		timeout.tv_sec = 0;
-		timeout.tv_usec = 5000; //a faire varier pr checker 
-		int res = select((*p).sockfd+1,&desc,NULL,NULL,&timeout);
+		timeout.tv_usec = 50000; //à faire varier
+		
+		//si le timeout n'est pas atteint ou on a recu l'ack
 		if	(res>0){
 			
 			recvfrom((*p).sockfd,bufferACK,sizeof(bufferACK),0,(struct sockaddr*)&(*p).addr, &len);
-			memcpy(numero_buff,bufferACK+3,6); //recuperer les numéros de séquence
+			memcpy(numero_buff,bufferACK+3,6);
 			
-			numero_int = atoi(numero_buff); //conv str en int base 10
-			if (numero_int > last_ACK){
-				//printf("UPDATE last_ACK %d    on %d seg\n",numero_int,nb_seg);
-				last_ACK = numero_int;
+			last_ACK = atoi(numero_buff); //convertit str en int base 10
+			if (last_ACK > Last_ACK_Updated){
+				//diff = last_ACK - Last_ACK_Updated;
+				Last_ACK_Updated = last_ACK;
+				//sem_post(semaphore); //on libere la sémaphore 
 			}
-			//printf("\nack recu == %d",numero_int);
+			
+			if(Last_ACK_Updated == windowthread){
+				//printf("\non libere la sema pour l ACK n° = %d ", Last_ACK_Updated);
+				sem_post(semaphore);	
+				windowthread += 50;
+			}
 
-			if(last_ACK == windowthread){
-				sem_post(semaphore);
-				//printf("\non libere la sema pour l ACK n° = %d ", last_ACK);
-				windowthread += 90;
-			}
-			//sem_post si last ack =50
-			if (numero_int == last_ACK){
-				//tab[2] = tab[1];
+			//printf("\nlast ack update = %d", Last_ACK_Updated);
+
+			if (last_ACK == Last_ACK_Updated){
 				tab[1] = tab[0];
-				tab[0] = numero_int;
-			}	
+				tab[0] = last_ACK;
+			}
+
 			if(tab[1] == tab[0]){
 
-				//printf("bug");
 				ACK_perdu_flag = tab[0]+1;
-				//printf("%d",ACK_perdu_flag);
 				bzero(buff_DATAT,sizeof(buff_DATAT));
 				sprintf(buff_DATAT, "%06d\n", ACK_perdu_flag);
 
@@ -128,83 +120,81 @@ void *thread_ack(void *param){
 				lendata=fread(buff_DATAT+6, 1,BUFF_SIZE-6, (*p).fileptr);//ranger la data a position 6
 				pthread_mutex_unlock(&mutex);
 
+				sendto((*p).sockfd, buff_DATAT, lendata+6, 0, (struct sockaddr*)&(*p).addr, sizeof((*p).addr));
 
-				int n = sendto((*p).sockfd, buff_DATAT, lendata+6, 0, (struct sockaddr*)&(*p).addr, sizeof((*p).addr));
-				
-				//printf("\nsegment renvoyé n°, %d\n", ACK_perdu_flag);
-				
-
-				//tab[2] = -3;
 				tab[1] = -2;
 				tab[0] = -1;		
-		}	
-		}else{
-			//gerer timeout donc retransmission du last ack si on a atteint la fin du timeout 
+				}	
+			}
+		//gerer timeout donc retransmission du last ack si on a atteint la fin du timeout 
+
+		else{
+			
 			bzero(buff_DATAT,sizeof(buff_DATAT));
-			sprintf(buff_DATAT, "%06d\n", last_ACK);
+			sprintf(buff_DATAT, "%06d\n", Last_ACK_Updated);
 
 			pthread_mutex_lock(&mutex);
-			fseek((*p).fileptr,(last_ACK-1)*(BUFF_SIZE-6),SEEK_SET);
-			lendata=fread(buff_DATAT+6, 1,BUFF_SIZE-6, (*p).fileptr);//ranger la data a position 6
+			fseek((*p).fileptr,(Last_ACK_Updated-1)*(BUFF_SIZE-6),SEEK_SET);
+			lendata=fread(buff_DATAT+6, 1,BUFF_SIZE-6, (*p).fileptr);
 			pthread_mutex_unlock(&mutex);
-
-
+		
 			int n = sendto((*p).sockfd, buff_DATAT, lendata+6, 0, (struct sockaddr*)&(*p).addr, sizeof((*p).addr));
-			
-			//printf("\nsegment renvoyé car timeout atteint n°, %d\n", last_ACK);
-
+			//printf("\nrenvoyé le n° prcq time out atteint %d", Last_ACK_Updated);
 		}
 	}
 }
 
+//envoie le fichier 
 void transfert_data(int datasocket, struct sockaddr_in addr){
 
-	char buff_DATA[BUFF_SIZE];
+	int connection_flag = 1; //tant qu'on a pas recu le ackFIN 
 	int compteur2=0;
 	int n;
+	char buff_DATA[BUFF_SIZE];
+
 	memset((char*)&addr,0,sizeof(addr));
-	int connection_flag = 1; //tant qu'on a pas recu le ackFIN 
-	int Swindow = max_window;
 	uint64_t startTime = time_now();
-	//int sem_init(sem_t *sem, int pshared, unsigned int value);
 	semaphore = sem_open("/semaphore", O_CREAT, 0600, 1); //semaphore = un pointeur vers la semaphore ouverte 
-	//n = sem_init(&semaphore, 0, 1);
-	
-	if (semaphore==SEM_FAILED){ //n==-1
+
+	if (semaphore==SEM_FAILED){
 		printf("\nERROR CREATION SEMAPHORE");
 		exit(1);
 	}
-
+	
 	pthread_mutex_init(&mutex, NULL); 
 	
 	while (connection_flag){
+
 		int len = sizeof(addr);
-		bzero(buff_DATA,sizeof(buff_DATA));
 		int open_flag = 1; // passe à 0 si on a ouvert le fichier du client suivant (sinon means il y a encore des ack de celui d'avant )
+		bzero(buff_DATA,sizeof(buff_DATA));
 		FILE *fileptr;
+		
 		while (open_flag){
+			
 			recvfrom(datasocket,buff_DATA,sizeof(buff_DATA),0,(struct sockaddr*)&addr, &len);
 			fileptr = fopen(buff_DATA, "rb");
 			bzero(buff_DATA,sizeof(buff_DATA));
+			
 			if (fileptr==NULL){
-				printf("\n erreur sur l'ouverture du fichier");
+				printf("\nerreur sur l'ouverture du fichier");
 			}
 			else {
 				open_flag = 0; 
 			}
 		}
+
 		//CALCULER LE NOMBRE DE SEGMENT
 		fseek(fileptr,0,SEEK_END); //déplace le pointeur vers la fin du fichier pr touver la taille apres 
 		long file_len = ftell(fileptr); // Dit la taille en byte du offset par rapport au debut di ficher -> la taille du fichier dans ce cas
 		rewind(fileptr); //remet au début du file ou fseek(fileptr,0,SEEK_STart)
 		nb_seg = (file_len / (BUFF_SIZE-6))  + 1; //-6 car 6 attribué aux numéro de séquence 
 		printf("nbr segment :\n %d",nb_seg);
-		nbfoiswindow = nb_seg/90;
+		nbfoiswindow = nb_seg/50;
 	
 		struct thread_args *param= malloc(sizeof(struct thread_args));
 		param->fileptr = fileptr;
 		param->addr = addr;
-		//param.buff_DATA = buff_DATA;
 		param->sockfd = datasocket;
 			
 		pthread_t thread_ack_id;
@@ -212,27 +202,22 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 
 		int lendata;
 		int compteurwindow = 0;
-		//int window = 50;
 		long compteur = 0;
 
-		while(last_ACK < nb_seg){
-			//tant qu'on est pas à la fin 
-			//printf("last ack = %d",last_ACK);
-			while (compteurwindow != nbfoiswindow+1){ //Swindow > 0 & //last_SND < nb_seg
+		while(Last_ACK_Updated < nb_seg){
+		
+			while (compteurwindow != nbfoiswindow+1){
 
 				//nanosleep((const struct timespec[]){{0, 500000000L}}, NULL);
 				if(last_SND==window){
-					
-					//printf("\nSema Bloquée au numéro = %d",last_SND);
-					window += 90;
+					window += 50;
 					compteur2++;
+					//printf("\nsema bloquee au n° %d", last_SND);
 					sem_wait(semaphore);
-					//printf("\nclast_snd =%d",last_SND);
-					
 				}
+
 				while (last_SND < window && last_SND < nb_seg)
 				{
-				//printf("\nlast_send =%d",last_SND);
 				compteur++;
 				bzero(buff_DATA,sizeof(buff_DATA));
 				sprintf(buff_DATA, "%06d\n", compteur);
@@ -243,21 +228,17 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 				pthread_mutex_unlock(&mutex);
 
 				int n = sendto(datasocket, buff_DATA, lendata+6, 0, (struct sockaddr*)&addr, sizeof(addr));
-				//printf("\nlendata %d", lendata);
 				if (n == -1){
 					perror("[ERROR] sending data to the client.");
 				}
 				bzero(buff_DATA,sizeof(buff_DATA));
-
 				last_SND ++;
 				if(last_SND==nb_seg){
 
 				}
-   
 				}
+
 				compteurwindow ++;
-				//sem_post(&semaphore); //sem débloquée 
-				//window += 50;
 				bzero(buff_DATA,sizeof(buff_DATA));
 
 			}
@@ -273,16 +254,17 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 		printf("taille du fichier %d \n",file_len);
 		printf("débit: %f MO/s \n",debit);
 		sem_destroy(semaphore);
-		//sem_close(semaphore);
-		//sem_unlink(semaphore);
 		fclose(fileptr);
 		pthread_mutex_destroy(&mutex);
-		//sem_unlink("sema");
 		connection_flag=0;
 
 	}			
 }
 
+
+/*-------------------------------------------------------------- */
+/*---------------------------MAIN------------------------------- */
+/*-------------------------------------------------------------- */
 
 int main(int argc,char* argv[])
 {
@@ -311,10 +293,8 @@ int main(int argc,char* argv[])
 	socklen_t len;
 	struct sockaddr_in cliaddr, servaddr,dataaddr;
 	char* message = "SYN-ACK1222"; //nouveau port pour socket d'écoute avec le client 
-	//void sig_chld(int);
 
-
-	//listenfd = socket(AF_INET, SOCK_STREAM, 0);
+	
 	bzero(&servaddr, sizeof(servaddr));
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -322,12 +302,11 @@ int main(int argc,char* argv[])
 
 	// binding server addr structure to listenfd
 	bind(listenfd, (struct sockaddr*)&servaddr, sizeof(servaddr));
-	//listen(listenfd, 10);
+
 
 	/* create UDP socket */
-	//int optvaludp=1;
+
 	socketudp = socket(AF_INET, SOCK_DGRAM, 0);
-	//setsockopt(socketudp,SOL_SOCKET,SO_REUSEADDR,(const void *)&optvaludp,sizeof(int)); //eviter blocage du port
 	// binding server addr structure to udp sockfd
 	bind(socketudp, (struct sockaddr*)&servaddr, sizeof(servaddr));
 
@@ -341,19 +320,14 @@ int main(int argc,char* argv[])
 	dataaddr.sin_port = htons(1222);
 	datasocket = socket(AF_INET, SOCK_DGRAM, 0);
 
-	//int optvaldata = 1;
-	//setsockopt(datasocket,SOL_SOCKET,SO_REUSEADDR,(const void *)&optvaldata,sizeof(int)); //eviter blocage du port
+	
     // Bind the socket with the server address 
   	bind(datasocket, (struct sockaddr*)&dataaddr, sizeof(servaddr));
-
-
-
 
 
 	for (;;) { //mettre la boucle for apres l'ouvertiure de connexion + rajouterfork pr gerer plusisuers client 
 
         //OUVERTURE DE CONNEXION
-		// if udp socket is readable receive the message.
 		len = sizeof(cliaddr);
 		bzero(buff_CON, sizeof(buff_CON));
 		printf("\nMessage du Client sur socketudp: ");
@@ -362,10 +336,8 @@ int main(int argc,char* argv[])
 
 		if (strcmp(buff_CON,"SYN") ==0 ){
 			puts(buff_CON);
-			//puts(message);
 			mb_octet = sendto(socketudp, (const char*)message, strlen(message), 0,
 			(struct sockaddr*)&cliaddr, sizeof(cliaddr));
-			//printf("octet:%d\n", mb_octet);
 		}
 		
 		if (strcmp(buff_CON,"ACK") ==0 ){
