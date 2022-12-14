@@ -81,7 +81,7 @@ void *thread_ack(void *param){
 		bzero(numero_buff,sizeof(numero_buff));
 		FD_SET((*p).sockfd,&desc);
 		timeout.tv_sec = 0;
-		timeout.tv_usec = 50000; //à faire varier
+		timeout.tv_usec = 5000; //à faire varier
 		
 		//si le timeout n'est pas atteint ou on a recu l'ack
 		if	(res>0){
@@ -245,10 +245,10 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 			}
 		}
 		
-		pthread_join(thread_ack_id,NULL);
 		strcpy(buff_DATA, "FIN");
   		sendto(datasocket, buff_DATA, BUFF_SIZE, 0, (struct sockaddr*)&addr, sizeof(addr));
 		uint64_t endtime = time_now();
+		pthread_join(thread_ack_id,NULL);
 		double timeTaken = (endtime - startTime)/1000000.0;
 		printf("temps de transmission: %f s\n",timeTaken);
 		double debit=((file_len-6.0)*0.000001)/timeTaken;
@@ -333,7 +333,7 @@ int main(int argc,char* argv[])
 		if (strcmp(buff_CON,"SYN") ==0 ){
 			puts(buff_CON);
 			port++;
-			char message[11];
+			char message[12];
 			sprintf(message,"SYN-ACK%d",port);
 			mb_octet = sendto(socketudp, (const char*)message, strlen(message), 0,
 			(struct sockaddr*)&cliaddr, sizeof(cliaddr));

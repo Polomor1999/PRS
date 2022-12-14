@@ -63,7 +63,7 @@ void *thread_ack(void *param){
 	char bufferACK[10];
 	char buff_DATAT[BUFF_SIZE];
 	char numero_buff[7];
-	int windowthread =  50;
+	int windowthread = 50;
 	int lendata;
 	int len = sizeof((*p).addr);
 	char *ptr;
@@ -81,7 +81,7 @@ void *thread_ack(void *param){
 		bzero(numero_buff,sizeof(numero_buff));
 		FD_SET((*p).sockfd,&desc);
 		timeout.tv_sec = 0;
-		timeout.tv_usec = 50000; //à faire varier
+		timeout.tv_usec = 5000; //à faire varier
 		
 		//si le timeout n'est pas atteint ou on a recu l'ack
 		if	(res>0){
@@ -139,7 +139,7 @@ void *thread_ack(void *param){
 			pthread_mutex_unlock(&mutex);
 		
 			int n = sendto((*p).sockfd, buff_DATAT, lendata+6, 0, (struct sockaddr*)&(*p).addr, sizeof((*p).addr));
-			//printf("\nrenvoyé le n° prcq time out atteint %d", Last_ACK_Updated);
+			printf("\nrenvoyé le n° prcq time out atteint %d", Last_ACK_Updated);
 		}
 	}
 }
@@ -244,9 +244,10 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 			}
 		}
 		
-		pthread_join(thread_ack_id,NULL);
+		
 		strcpy(buff_DATA, "FIN");
   		sendto(datasocket, buff_DATA, BUFF_SIZE, 0, (struct sockaddr*)&addr, sizeof(addr));
+		pthread_join(thread_ack_id,NULL);
 		uint64_t endtime = time_now();
 		double timeTaken = (endtime - startTime)/1000000.0;
 		printf("temps de transmission: %f s\n",timeTaken);
@@ -257,7 +258,8 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 		fclose(fileptr);
 		pthread_mutex_destroy(&mutex);
 		connection_flag=0;
-
+		//|grep drop |wc
+		//|grep timeout |wc
 	}			
 }
 
