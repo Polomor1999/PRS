@@ -12,5 +12,5 @@ serveur3-CodeWarriors: serveur3-CodeWarriors.c
 clean:
 	rm -f serveur2-CodeWarriors
 	rm -f serveur1-CodeWarriors
-	rm: -f serveur3-CodeWarriors
+	rm -f serveur3-CodeWarriors
 	
