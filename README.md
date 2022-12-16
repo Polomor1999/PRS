@@ -12,11 +12,11 @@ Nous sommes 2 étudiants en 4ème année de l'école d'ingénieur INSA Lyon.
 Fini 
 
 ### OBJECTIF:
--Implémenter le contrôle de congestion de TCP sur UDP 
--Avoir 3 serveurs pour 3 scénarios différents
-	-Scénario 1: Client n°1 qui perd rarement des trames 
-	-Scénario 2: Client n° 2 qui perd quasiment toutes les trames
-	-Scénario 3: Connexion simultanée de plusieurs client n° 1
+- Implémenter le contrôle de congestion de TCP sur UDP 
+- Avoir 3 serveurs pour 3 scénarios différents
+ - Scénario 1: Client n°1 qui perd rarement des trames 
+ - Scénario 2: Client n° 2 qui perd quasiment toutes les trames
+ - Scénario 3: Connexion simultanée de plusieurs client n° 1
                         
 ### ORGANISATION:
 - *bin*/ --contient 3 fichiers .c appelés serveurX-CodeWarriors, X étant le numéro du scénario
