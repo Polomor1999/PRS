@@ -1,18 +1,16 @@
-all: serveur1 serveur2 serveur3 client 
-serveur1: serveur1.c 
-	gcc serveur1.c -o serveur1 -lpthread
+all: serveur1-CodeWarriors serveur2-CodeWarriors serveur3-CodeWarriors 
+serveur1-CodeWarriors: serveur1-CodeWarriors.c 
+	gcc serveur1-CodeWarriors.c -o serveur1-CodeWarriors -lpthread
 
-serveur2: serveur2.c 
-	gcc serveur2.c -o serveur2 -lpthread
+serveur2-CodeWarriors: serveur2-CodeWarriors.c 
+	gcc serveur2-CodeWarriors.c -o serveur2-CodeWarriors -lpthread
 
-serveur3: serveur3.c 
-	gcc serveur3.c -o serveur3 -lpthread
+serveur3-CodeWarriors: serveur3-CodeWarriors.c 
+	gcc serveur3-CodeWarriors.c -o serveur3-CodeWarriors -lpthread
 
-client: client.c
-	gcc client.c -o client
+
 clean:
-	rm -f serveur2
-	rm -f serveur1
-	r: -f serveur3
+	rm -f serveur2-CodeWarriors
+	rm -f serveur1-CodeWarriors
+	rm: -f serveur3-CodeWarriors
 	
-	rm -f client
