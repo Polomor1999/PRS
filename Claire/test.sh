@@ -1,8 +1,6 @@
 #!/bin/bash
 
-i=0
-while [ $i -le 50000 ]
+for i in 1 2 3 4 5 
 do
-    echo abcdefghij >> a.txt
-    i=$((i+1))
+    ./serveur1 1223 
 done

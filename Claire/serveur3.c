@@ -33,7 +33,7 @@ int last_SND = 0;
 int ACK_perdu_flag = 0;
 int nbfoiswindow;
 int diff; 
-int window = 50;
+int window = 55;
 
 struct timeval timeout_RTT_time;
 struct thread_args
@@ -63,7 +63,7 @@ void *thread_ack(void *param){
 	char bufferACK[10];
 	char buff_DATAT[BUFF_SIZE];
 	char numero_buff[7];
-	int windowthread =  50;
+	int windowthread =  55;
 	int lendata;
 	int len = sizeof((*p).addr);
 	char *ptr;
@@ -81,7 +81,7 @@ void *thread_ack(void *param){
 		bzero(numero_buff,sizeof(numero_buff));
 		FD_SET((*p).sockfd,&desc);
 		timeout.tv_sec = 0;
-		timeout.tv_usec = 5000; //à faire varier
+		timeout.tv_usec = 4000; //à faire varier
 		
 		//si le timeout n'est pas atteint ou on a recu l'ack
 		if	(res>0){
@@ -99,7 +99,7 @@ void *thread_ack(void *param){
 			if(Last_ACK_Updated == windowthread){
 				//printf("\non libere la sema pour l ACK n° = %d ", Last_ACK_Updated);
 				sem_post(semaphore);	
-				windowthread += 50;
+				windowthread += 55;
 			}
 
 			//printf("\nlast ack update = %d", Last_ACK_Updated);
@@ -191,7 +191,7 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 		rewind(fileptr); //remet au début du file ou fseek(fileptr,0,SEEK_STart)
 		nb_seg = (file_len / (BUFF_SIZE-6))  + 1; //-6 car 6 attribué aux numéro de séquence 
 		printf("nbr segment :\n %d",nb_seg);
-		nbfoiswindow = nb_seg/50;
+		nbfoiswindow = nb_seg/55;
 	
 		struct thread_args *param= malloc(sizeof(struct thread_args));
 		param->fileptr = fileptr;
@@ -211,7 +211,7 @@ void transfert_data(int datasocket, struct sockaddr_in addr){
 
 				//nanosleep((const struct timespec[]){{0, 500000000L}}, NULL);
 				if(last_SND==window){
-					window += 50;
+					window += 55;
 					compteur2++;
 					//printf("\nsema bloquee au n° %d", last_SND);
 					sem_wait(semaphore);
@@ -273,12 +273,12 @@ int main(int argc,char* argv[])
 
 	if (argc < 2)
 	{
-		printf("Too few arguments given.\n");
+		printf("Pas assez d'arguments.\n");
 		exit(1);
 	}
 	else if (argc > 2)
 	{
-		printf("Too many arguments given.\n");
+		printf("Trop d'argument.\n");
 		exit(1);
 	}
 	else
@@ -326,7 +326,7 @@ int main(int argc,char* argv[])
 		memset((char *)&cliaddr,0,sizeof(cliaddr)); //reset cliaddr pr chaque client
 
 		
-		printf("\nMessage du Client sur socketudp: ");
+		printf("Message du Client sur socketudp:\n ");
 		n = recvfrom(socketudp, buff_CON, sizeof(buff_CON), 0,
 					(struct sockaddr*)&cliaddr, &len);
 
@@ -363,7 +363,7 @@ int main(int argc,char* argv[])
 		
 		if (strcmp(buff_CON,"ACK") ==0 ){
 			puts(buff_CON);
-			printf("\nFin d'ouverture de connexion ");
+			printf("Fin d'ouverture de connexion \n");
 
 			
 
